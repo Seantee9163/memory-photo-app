@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 纪念照片生成器 Demo</title>
+  <style>
+    body { margin:0; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; background:#fffbeb; color:#334155; }
+    .container{max-width:1080px;margin:0 auto;padding:20px}
+    .card{background:#fff;border:1px solid #fde68a;border-radius:16px;padding:20px;margin-bottom:16px}
+    h1{color:#b45309}
+    .btn{display:inline-block;background:#d97706;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;border:none}
+    .grid{display:grid;gap:12px}
+    .result{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
+    img{width:100%;height:160px;object-fit:cover;border-radius:10px}
+    input,select{width:100%;padding:10px;border:1px solid #fcd34d;border-radius:8px;margin-top:6px}
+    .step{padding:10px;background:#fff7ed;border-radius:10px;margin:8px 0}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section id="home" class="card">
+      <h1>AI 纪念照片生成器</h1>
+      <p>上传照片，一键修复并生成 6 张温暖风格纪念图</p>
+      <a class="btn" href="#upload">开始制作</a>
+    </section>
+
+    <section id="upload" class="card">
+      <h1>上传页 /upload</h1>
+      <label>上传 1 到 3 张照片<input type="file" multiple accept="image/*"></label><br><br>
+      <label>填写组名<input type="text" placeholder="例如：外婆纪念相册"></label><br><br>
+      <label>选择类型
+        <select>
+          <option>母婴</option><option>家庭</option><option>毕业</option><option>追思</option><option>朋友</option><option>其他</option>
+        </select>
+      </label><br><br>
+      <a class="btn" href="#processing">开始生成</a>
+    </section>
+
+    <section id="processing" class="card">
+      <h1>处理中页 /processing</h1>
+      <div class="step">正在检查照片</div>
+      <div class="step">正在修复老照片</div>
+      <div class="step">正在生成高级写真</div>
+      <div class="step">正在生成漫画风格</div>
+      <div class="step">正在生成趣味风格</div>
+      <div class="step">正在整理下载结果</div>
+      <a class="btn" href="#result">查看结果</a>
+    </section>
+
+    <section id="result" class="card">
+      <h1>结果页 /result</h1>
+      <div class="grid result">
+        <div><img src="https://picsum.photos/seed/m1/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
+        <div><img src="https://picsum.photos/seed/m2/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
+        <div><img src="https://picsum.photos/seed/m3/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
+        <div><img src="https://picsum.photos/seed/m4/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
+        <div><img src="https://picsum.photos/seed/m5/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
+        <div><img src="https://picsum.photos/seed/m6/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
+      </div>
+      <button class="btn" style="margin-top:12px">全部下载</button>
+    </section>
+  </div>
+</body>
+</html>
