@@ -85,15 +85,56 @@
     @keyframes spin { to { transform: rotate(360deg);} }
     .step { padding: 12px 14px; background: #fff8f4; border-radius: 12px; border: 1px solid #f6dfd6; }
 
-    .result-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-    .card-img { background: #fffaf6; border: 1px solid #f0d4c8; border-radius: 14px; padding: 10px; }
-    .card-img img { width: 100%; height: 148px; object-fit: cover; border-radius: 10px; display: block; }
+    .result-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+    .card-img { background: linear-gradient(160deg, #fffdfb 0%, #fff4ec 100%); border: 1px solid #f0d4c8; border-radius: 16px; padding: 10px; box-shadow: 0 10px 28px rgba(132, 88, 70, .12); }
+    .memorial-art {
+      position: relative;
+      overflow: hidden;
+      height: 170px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.72);
+      background: radial-gradient(circle at 20% 18%, rgba(255,255,255,.82), transparent 38%),
+        linear-gradient(140deg, #f9c8ad 0%, #f4a89b 45%, #b68bc9 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.3);
+      isolation: isolate;
+    }
+    .memorial-art::before {
+      content: '';
+      position: absolute;
+      inset: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.5);
+      background: linear-gradient(180deg, rgba(255,255,255,.45), rgba(255,255,255,.08));
+    }
+    .memorial-art::after {
+      content: '';
+      position: absolute;
+      width: 90px;
+      height: 130px;
+      left: 50%;
+      bottom: -12px;
+      transform: translateX(-50%);
+      border-radius: 50px 50px 18px 18px;
+      background: linear-gradient(180deg, rgba(77,44,42,.35), rgba(43,24,22,.7));
+      filter: blur(.2px);
+    }
+    .glow {
+      position: absolute;
+      width: 150px;
+      height: 150px;
+      right: -35px;
+      top: -42px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,246,219,.88) 0%, rgba(255,255,255,0) 68%);
+      mix-blend-mode: screen;
+    }
+    .frame-title { margin: 10px 2px 0; font-size: 13px; color: #6a4e43; min-height: 38px; line-height: 1.35; }
     .card-img button { width: 100%; margin-top: 8px; }
 
     @media (max-width: 860px) {
       .hero-grid { grid-template-columns: 1fr; }
       .panel { border-radius: 18px; padding: 18px; }
-      .card-img img { height: 132px; }
+      .memorial-art { height: 150px; }
     }
   </style>
 </head>
@@ -151,13 +192,14 @@
     <section id="resultSection" class="panel hidden">
       <h2>你的纪念图已生成</h2>
       <p>以下为 6 张 mock 纪念图，可单独下载保存。</p>
+      <p style="margin-top:8px;">目前为 Demo 预览图，正式版将根据上传照片生成真实纪念图。</p>
       <div class="result-grid" style="margin-top:14px;">
-        <div class="card-img"><img src="https://picsum.photos/seed/memory1/640/420" alt="纪念图1" /><button class="btn btn-soft">下载图片 1</button></div>
-        <div class="card-img"><img src="https://picsum.photos/seed/memory2/640/420" alt="纪念图2" /><button class="btn btn-soft">下载图片 2</button></div>
-        <div class="card-img"><img src="https://picsum.photos/seed/memory3/640/420" alt="纪念图3" /><button class="btn btn-soft">下载图片 3</button></div>
-        <div class="card-img"><img src="https://picsum.photos/seed/memory4/640/420" alt="纪念图4" /><button class="btn btn-soft">下载图片 4</button></div>
-        <div class="card-img"><img src="https://picsum.photos/seed/memory5/640/420" alt="纪念图5" /><button class="btn btn-soft">下载图片 5</button></div>
-        <div class="card-img"><img src="https://picsum.photos/seed/memory6/640/420" alt="纪念图6" /><button class="btn btn-soft">下载图片 6</button></div>
+        <div class="card-img"><div class="memorial-art"><span class="glow"></span></div><p class="frame-title">01 高级写真 · 温暖纪实</p><button class="btn btn-soft">下载图片 1</button></div>
+        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 18% 12%, rgba(255,255,255,.78), transparent 38%), linear-gradient(150deg, #f4c4b6 0%, #e4a48c 44%, #8d719f 100%);"><span class="glow"></span></div><p class="frame-title">02 高级写真 · 电影故事感</p><button class="btn btn-soft">下载图片 2</button></div>
+        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 24% 16%, rgba(255,255,255,.8), transparent 38%), linear-gradient(150deg, #ffd5bb 0%, #f7b4a1 40%, #8ea7d8 100%);"><span class="glow"></span></div><p class="frame-title">03 漫画风 · 治愈温暖</p><button class="btn btn-soft">下载图片 3</button></div>
+        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 22% 15%, rgba(255,255,255,.78), transparent 38%), linear-gradient(150deg, #f9d0cd 0%, #e8b6cf 42%, #8ea0d9 100%);"><span class="glow"></span></div><p class="frame-title">04 韩漫风 · 精致温柔</p><button class="btn btn-soft">下载图片 4</button></div>
+        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 18% 14%, rgba(255,255,255,.8), transparent 38%), linear-gradient(148deg, #ffe2bf 0%, #f8c48c 42%, #f095a2 100%);"><span class="glow"></span></div><p class="frame-title">05 趣味 pose · 轻松可爱</p><button class="btn btn-soft">下载图片 5</button></div>
+        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 20% 14%, rgba(255,255,255,.8), transparent 38%), linear-gradient(145deg, #ffd8be 0%, #f0b1a4 45%, #9d8ac8 100%);"><span class="glow"></span></div><p class="frame-title">06 创意剧情 · 温暖有趣</p><button class="btn btn-soft">下载图片 6</button></div>
       </div>
       <div class="actions">
         <button id="restartBtn" class="btn btn-primary">重新制作</button>
@@ -201,7 +243,11 @@
       files.forEach((file, i) => {
         const item = document.createElement('div');
         item.className = 'file-item';
-        item.textContent = `照片 ${i + 1}：${file.name}`;
+        const label = document.createElement('span');
+        label.textContent = `照片 ${i + 1}：`;
+        const fileName = document.createElement('strong');
+        fileName.textContent = file.name;
+        item.append(label, fileName);
         fileList.appendChild(item);
       });
       generateBtn.disabled = !(files.length >= 1 && files.length <= 3);
