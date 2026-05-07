@@ -3,63 +3,217 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI 纪念照片生成器 Demo</title>
+  <title>Memory Photo · 纪念照片生成器</title>
   <style>
-    body { margin:0; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif; background:#fffbeb; color:#334155; }
-    .container{max-width:1080px;margin:0 auto;padding:20px}
-    .card{background:#fff;border:1px solid #fde68a;border-radius:16px;padding:20px;margin-bottom:16px}
-    h1{color:#b45309}
-    .btn{display:inline-block;background:#d97706;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;border:none}
-    .grid{display:grid;gap:12px}
-    .result{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
-    img{width:100%;height:160px;object-fit:cover;border-radius:10px}
-    input,select{width:100%;padding:10px;border:1px solid #fcd34d;border-radius:8px;margin-top:6px}
-    .step{padding:10px;background:#fff7ed;border-radius:10px;margin:8px 0}
+    :root {
+      --bg1: #fff7f1;
+      --bg2: #fffdf9;
+      --text: #3f2f29;
+      --muted: #7a685f;
+      --primary: #cb7f67;
+      --primary-deep: #b7654c;
+      --card: rgba(255, 255, 255, 0.8);
+      --border: rgba(203, 127, 103, 0.2);
+      --shadow: 0 18px 40px rgba(123, 82, 67, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 20% 0%, #ffe9df 0%, var(--bg1) 35%, var(--bg2) 100%);
+      min-height: 100vh;
+    }
+    .container { max-width: 1080px; margin: 0 auto; padding: 22px 16px 40px; }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      border-radius: 24px;
+      padding: 24px;
+      backdrop-filter: blur(10px);
+      margin-top: 14px;
+    }
+    .hidden { display: none; }
+    h1, h2 { margin: 0 0 10px; line-height: 1.25; }
+    h1 { font-size: clamp(28px, 4vw, 42px); }
+    h2 { font-size: clamp(22px, 3.2vw, 30px); }
+    p { margin: 0; color: var(--muted); }
+
+    .hero { padding: clamp(28px, 4vw, 44px); }
+    .tag { display: inline-block; font-size: 12px; padding: 6px 10px; border-radius: 999px; background: #fff2ec; color: #a85f49; margin-bottom: 12px; }
+    .hero-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: center; }
+    .feature-list { margin-top: 16px; display: grid; gap: 8px; }
+    .feature { background: #fff8f4; border-radius: 12px; padding: 10px 12px; font-size: 14px; color: #6f5246; }
+
+    .btn {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: 0.2s ease;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(184, 96, 73, 0.3);
+    }
+    .btn-primary:hover { transform: translateY(-1px); }
+    .btn-soft { background: #fff5f0; color: #a5563f; }
+    .actions { margin-top: 22px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .upload-box {
+      border: 1.5px dashed #d9a694;
+      background: #fffaf7;
+      border-radius: 16px;
+      padding: 20px;
+      text-align: center;
+    }
+    input[type="file"] { width: 100%; margin-top: 10px; }
+    .tip { font-size: 13px; margin-top: 10px; }
+    .file-list { margin-top: 14px; display: grid; gap: 8px; }
+    .file-item { background: #fff; border: 1px solid #f0d7cc; border-radius: 10px; padding: 10px; font-size: 14px; }
+
+    .processing-wrap { display: grid; gap: 12px; }
+    .spinner {
+      width: 64px; height: 64px; border-radius: 50%;
+      border: 6px solid #f3d6cb; border-top-color: var(--primary); margin: 4px auto 10px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg);} }
+    .step { padding: 12px 14px; background: #fff8f4; border-radius: 12px; border: 1px solid #f6dfd6; }
+
+    .result-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+    .card-img { background: #fffaf6; border: 1px solid #f0d4c8; border-radius: 14px; padding: 10px; }
+    .card-img img { width: 100%; height: 148px; object-fit: cover; border-radius: 10px; display: block; }
+    .card-img button { width: 100%; margin-top: 8px; }
+
+    @media (max-width: 860px) {
+      .hero-grid { grid-template-columns: 1fr; }
+      .panel { border-radius: 18px; padding: 18px; }
+      .card-img img { height: 132px; }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <section id="home" class="card">
-      <h1>AI 纪念照片生成器</h1>
-      <p>上传照片，一键修复并生成 6 张温暖风格纪念图</p>
-      <a class="btn" href="#upload">开始制作</a>
-    </section>
-
-    <section id="upload" class="card">
-      <h1>上传页 /upload</h1>
-      <label>上传 1 到 3 张照片<input type="file" multiple accept="image/*"></label><br><br>
-      <label>填写组名<input type="text" placeholder="例如：外婆纪念相册"></label><br><br>
-      <label>选择类型
-        <select>
-          <option>母婴</option><option>家庭</option><option>毕业</option><option>追思</option><option>朋友</option><option>其他</option>
-        </select>
-      </label><br><br>
-      <a class="btn" href="#processing">开始生成</a>
-    </section>
-
-    <section id="processing" class="card">
-      <h1>处理中页 /processing</h1>
-      <div class="step">正在检查照片</div>
-      <div class="step">正在修复老照片</div>
-      <div class="step">正在生成高级写真</div>
-      <div class="step">正在生成漫画风格</div>
-      <div class="step">正在生成趣味风格</div>
-      <div class="step">正在整理下载结果</div>
-      <a class="btn" href="#result">查看结果</a>
-    </section>
-
-    <section id="result" class="card">
-      <h1>结果页 /result</h1>
-      <div class="grid result">
-        <div><img src="https://picsum.photos/seed/m1/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
-        <div><img src="https://picsum.photos/seed/m2/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
-        <div><img src="https://picsum.photos/seed/m3/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
-        <div><img src="https://picsum.photos/seed/m4/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
-        <div><img src="https://picsum.photos/seed/m5/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
-        <div><img src="https://picsum.photos/seed/m6/600/400"><button class="btn" style="width:100%;margin-top:8px">下载</button></div>
+  <main class="container">
+    <section id="homeSection" class="panel hero">
+      <span class="tag">Memory Photo · Demo</span>
+      <div class="hero-grid">
+        <div>
+          <h1>把珍贵回忆，做成可以收藏的纪念影像</h1>
+          <p>适用于母亲节、先人追思、家庭纪念、毕业纪念。上传照片后，系统将生成 6 张温暖风格纪念图。</p>
+          <div class="feature-list">
+            <div class="feature">🌷 温暖胶片感调色，突出情感和仪式感</div>
+            <div class="feature">🕊️ 纪念主题模板，适配追思与家庭故事</div>
+            <div class="feature">🎓 可用于毕业、亲子、家族回忆留存</div>
+          </div>
+          <div class="actions">
+            <button id="startBtn" class="btn btn-primary">开始制作</button>
+          </div>
+        </div>
+        <div>
+          <img src="https://picsum.photos/seed/hero-memory/700/520" alt="纪念照片示例" style="width:100%;border-radius:18px;box-shadow:0 14px 28px rgba(153,100,82,.22);" />
+        </div>
       </div>
-      <button class="btn" style="margin-top:12px">全部下载</button>
     </section>
-  </div>
+
+    <section id="uploadSection" class="panel hidden">
+      <h2>上传照片</h2>
+      <p>请选择 1 到 3 张清晰照片，再开始生成纪念图。</p>
+      <div class="upload-box" style="margin-top:14px;">
+        <label for="fileInput"><strong>选择照片文件</strong></label>
+        <input id="fileInput" type="file" accept="image/*" multiple />
+        <p class="tip">支持 JPG/PNG，最多 3 张。</p>
+      </div>
+      <div id="fileList" class="file-list"></div>
+      <div class="actions">
+        <button id="generateBtn" class="btn btn-primary" disabled>开始生成</button>
+      </div>
+    </section>
+
+    <section id="processingSection" class="panel hidden">
+      <h2>正在为你制作纪念图</h2>
+      <p>请稍候，大约 3 秒完成。</p>
+      <div class="processing-wrap" style="margin-top:14px;">
+        <div class="spinner" aria-hidden="true"></div>
+        <div class="step">1. 检查照片完整性</div>
+        <div class="step">2. 自动修复画质与光影</div>
+        <div class="step">3. 匹配纪念主题风格</div>
+        <div class="step">4. 生成温暖高级感画面</div>
+        <div class="step">5. 输出 6 张纪念成片</div>
+        <div class="step">6. 整理下载与分享格式</div>
+      </div>
+    </section>
+
+    <section id="resultSection" class="panel hidden">
+      <h2>你的纪念图已生成</h2>
+      <p>以下为 6 张 mock 纪念图，可单独下载保存。</p>
+      <div class="result-grid" style="margin-top:14px;">
+        <div class="card-img"><img src="https://picsum.photos/seed/memory1/640/420" alt="纪念图1" /><button class="btn btn-soft">下载图片 1</button></div>
+        <div class="card-img"><img src="https://picsum.photos/seed/memory2/640/420" alt="纪念图2" /><button class="btn btn-soft">下载图片 2</button></div>
+        <div class="card-img"><img src="https://picsum.photos/seed/memory3/640/420" alt="纪念图3" /><button class="btn btn-soft">下载图片 3</button></div>
+        <div class="card-img"><img src="https://picsum.photos/seed/memory4/640/420" alt="纪念图4" /><button class="btn btn-soft">下载图片 4</button></div>
+        <div class="card-img"><img src="https://picsum.photos/seed/memory5/640/420" alt="纪念图5" /><button class="btn btn-soft">下载图片 5</button></div>
+        <div class="card-img"><img src="https://picsum.photos/seed/memory6/640/420" alt="纪念图6" /><button class="btn btn-soft">下载图片 6</button></div>
+      </div>
+      <div class="actions">
+        <button id="restartBtn" class="btn btn-primary">重新制作</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const homeSection = document.getElementById('homeSection');
+    const uploadSection = document.getElementById('uploadSection');
+    const processingSection = document.getElementById('processingSection');
+    const resultSection = document.getElementById('resultSection');
+    const startBtn = document.getElementById('startBtn');
+    const generateBtn = document.getElementById('generateBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+
+    let processingTimer = null;
+
+    function show(section) {
+      [uploadSection, processingSection, resultSection].forEach(s => s.classList.add('hidden'));
+      section.classList.remove('hidden');
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    startBtn.addEventListener('click', () => {
+      show(uploadSection);
+    });
+
+    fileInput.addEventListener('change', () => {
+      const files = Array.from(fileInput.files || []);
+      if (files.length > 3) {
+        alert('最多只能上传 3 张照片。');
+        fileInput.value = '';
+        fileList.innerHTML = '';
+        generateBtn.disabled = true;
+        return;
+      }
+      fileList.innerHTML = files.map((file, i) => `<div class="file-item">照片 ${i + 1}：${file.name}</div>`).join('');
+      generateBtn.disabled = !(files.length >= 1 && files.length <= 3);
+    });
+
+    generateBtn.addEventListener('click', () => {
+      show(processingSection);
+      clearTimeout(processingTimer);
+      processingTimer = setTimeout(() => show(resultSection), 3000);
+    });
+
+    restartBtn.addEventListener('click', () => {
+      clearTimeout(processingTimer);
+      fileInput.value = '';
+      fileList.innerHTML = '';
+      generateBtn.disabled = true;
+      show(uploadSection);
+    });
+  </script>
 </body>
 </html>
