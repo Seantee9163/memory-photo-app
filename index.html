@@ -193,11 +193,17 @@
       if (files.length > 3) {
         alert('最多只能上传 3 张照片。');
         fileInput.value = '';
-        fileList.innerHTML = '';
+        fileList.replaceChildren();
         generateBtn.disabled = true;
         return;
       }
-      fileList.innerHTML = files.map((file, i) => `<div class="file-item">照片 ${i + 1}：${file.name}</div>`).join('');
+      fileList.replaceChildren();
+      files.forEach((file, i) => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.textContent = `照片 ${i + 1}：${file.name}`;
+        fileList.appendChild(item);
+      });
       generateBtn.disabled = !(files.length >= 1 && files.length <= 3);
     });
 
@@ -210,7 +216,7 @@
     restartBtn.addEventListener('click', () => {
       clearTimeout(processingTimer);
       fileInput.value = '';
-      fileList.innerHTML = '';
+      fileList.replaceChildren();
       generateBtn.disabled = true;
       show(uploadSection);
     });
