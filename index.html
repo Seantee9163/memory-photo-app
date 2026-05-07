@@ -46,6 +46,8 @@
     .hero-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: center; }
     .feature-list { margin-top: 16px; display: grid; gap: 8px; }
     .feature { background: #fff8f4; border-radius: 12px; padding: 10px 12px; font-size: 14px; color: #6f5246; }
+    .scene-tags { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .scene-chip { background: #fff3eb; border: 1px solid #f2d1c4; color: #9a5f4d; padding: 6px 10px; border-radius: 999px; font-size: 12px; }
 
     .btn {
       border: none;
@@ -144,8 +146,12 @@
       <span class="tag">Memory Photo · Demo</span>
       <div class="hero-grid">
         <div>
-          <h1>把珍贵回忆，做成可以收藏的纪念影像</h1>
-          <p>适用于母亲节、先人追思、家庭纪念、毕业纪念。上传照片后，系统将生成 6 张温暖风格纪念图。</p>
+          <h1>把想念，重新变成一张可以收藏的照片</h1>
+          <p>上传旧照片、单人照或家庭照，AI 将为你生成 6 种温暖纪念风格。</p>
+          <div class="scene-tags" aria-label="适用场景">
+            <span class="scene-chip">母亲节</span><span class="scene-chip">父亲节</span><span class="scene-chip">先人怀念</span>
+            <span class="scene-chip">毕业纪念</span><span class="scene-chip">家庭团圆</span><span class="scene-chip">黄金贺卡</span>
+          </div>
           <div class="feature-list">
             <div class="feature">🌷 温暖胶片感调色，突出情感和仪式感</div>
             <div class="feature">🕊️ 纪念主题模板，适配追思与家庭故事</div>
@@ -164,11 +170,13 @@
     <section id="uploadSection" class="panel hidden">
       <h2>上传照片</h2>
       <p>请选择 1 到 3 张清晰照片，再开始生成纪念图。</p>
+      <p style="margin-top:8px;">建议上传清晰正脸照片；老照片、破损照片也可以先做 Demo 测试。</p>
       <div class="upload-box" style="margin-top:14px;">
         <label for="fileInput"><strong>选择照片文件</strong></label>
         <input id="fileInput" type="file" accept="image/*" multiple />
         <p class="tip">支持 JPG/PNG，最多 3 张。</p>
       </div>
+      <p id="fileCount" class="tip" aria-live="polite">已选照片：0 张</p>
       <div id="fileList" class="file-list"></div>
       <div class="actions">
         <button id="generateBtn" class="btn btn-primary" disabled>开始生成</button>
@@ -180,32 +188,36 @@
       <p>请稍候，大约 3 秒完成。</p>
       <div class="processing-wrap" style="margin-top:14px;">
         <div class="spinner" aria-hidden="true"></div>
-        <div class="step">1. 检查照片完整性</div>
-        <div class="step">2. 自动修复画质与光影</div>
-        <div class="step">3. 匹配纪念主题风格</div>
-        <div class="step">4. 生成温暖高级感画面</div>
-        <div class="step">5. 输出 6 张纪念成片</div>
-        <div class="step">6. 整理下载与分享格式</div>
+        <div class="step">1. 正在读取记忆</div>
+        <div class="step">2. 正在修复旧时光</div>
+        <div class="step">3. 正在重建人物细节</div>
+        <div class="step">4. 正在生成纪念写真</div>
+        <div class="step">5. 正在生成漫画风格</div>
+        <div class="step">6. 正在整理 6 张成片</div>
       </div>
     </section>
 
     <section id="resultSection" class="panel hidden">
       <h2>你的纪念图已生成</h2>
       <p>以下为 6 张 mock 纪念图，可单独下载保存。</p>
-      <p style="margin-top:8px;">目前为 Demo 预览图，正式版将根据上传照片生成真实纪念图。</p>
+      <p style="margin-top:8px;">目前为 Demo 占位图，正式版将根据上传照片生成真实纪念图。</p>
       <div class="result-grid" style="margin-top:14px;">
-        <div class="card-img"><div class="memorial-art"><span class="glow"></span></div><p class="frame-title">01 高级写真 · 温暖纪实</p><button class="btn btn-soft">下载图片 1</button></div>
-        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 18% 12%, rgba(255,255,255,.78), transparent 38%), linear-gradient(150deg, #f4c4b6 0%, #e4a48c 44%, #8d719f 100%);"><span class="glow"></span></div><p class="frame-title">02 高级写真 · 电影故事感</p><button class="btn btn-soft">下载图片 2</button></div>
-        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 24% 16%, rgba(255,255,255,.8), transparent 38%), linear-gradient(150deg, #ffd5bb 0%, #f7b4a1 40%, #8ea7d8 100%);"><span class="glow"></span></div><p class="frame-title">03 漫画风 · 治愈温暖</p><button class="btn btn-soft">下载图片 3</button></div>
-        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 22% 15%, rgba(255,255,255,.78), transparent 38%), linear-gradient(150deg, #f9d0cd 0%, #e8b6cf 42%, #8ea0d9 100%);"><span class="glow"></span></div><p class="frame-title">04 韩漫风 · 精致温柔</p><button class="btn btn-soft">下载图片 4</button></div>
-        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 18% 14%, rgba(255,255,255,.8), transparent 38%), linear-gradient(148deg, #ffe2bf 0%, #f8c48c 42%, #f095a2 100%);"><span class="glow"></span></div><p class="frame-title">05 趣味 pose · 轻松可爱</p><button class="btn btn-soft">下载图片 5</button></div>
-        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 20% 14%, rgba(255,255,255,.8), transparent 38%), linear-gradient(145deg, #ffd8be 0%, #f0b1a4 45%, #9d8ac8 100%);"><span class="glow"></span></div><p class="frame-title">06 创意剧情 · 温暖有趣</p><button class="btn btn-soft">下载图片 6</button></div>
+        <div class="card-img"><div class="memorial-art"><span class="glow"></span></div><p class="frame-title">01 像一次重新相见</p><button class="btn btn-soft">下载图片 1</button></div>
+        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 18% 12%, rgba(255,255,255,.78), transparent 38%), linear-gradient(150deg, #f4c4b6 0%, #e4a48c 44%, #8d719f 100%);"><span class="glow"></span></div><p class="frame-title">02 像电影里被保存的瞬间</p><button class="btn btn-soft">下载图片 2</button></div>
+        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 24% 16%, rgba(255,255,255,.8), transparent 38%), linear-gradient(150deg, #ffd5bb 0%, #f7b4a1 40%, #8ea7d8 100%);"><span class="glow"></span></div><p class="frame-title">03 让回忆变得柔软</p><button class="btn btn-soft">下载图片 3</button></div>
+        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 22% 15%, rgba(255,255,255,.78), transparent 38%), linear-gradient(150deg, #f9d0cd 0%, #e8b6cf 42%, #8ea0d9 100%);"><span class="glow"></span></div><p class="frame-title">04 把思念画成温柔</p><button class="btn btn-soft">下载图片 4</button></div>
+        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 18% 14%, rgba(255,255,255,.8), transparent 38%), linear-gradient(148deg, #ffe2bf 0%, #f8c48c 42%, #f095a2 100%);"><span class="glow"></span></div><p class="frame-title">05 轻一点，也可以很珍贵</p><button class="btn btn-soft">下载图片 5</button></div>
+        <div class="card-img"><div class="memorial-art" style="background: radial-gradient(circle at 20% 14%, rgba(255,255,255,.8), transparent 38%), linear-gradient(145deg, #ffd8be 0%, #f0b1a4 45%, #9d8ac8 100%);"><span class="glow"></span></div><p class="frame-title">06 给故事多一个可能</p><button class="btn btn-soft">下载图片 6</button></div>
       </div>
       <div class="actions">
         <button id="restartBtn" class="btn btn-primary">重新制作</button>
       </div>
     </section>
   </main>
+  <footer style="text-align:center;padding:0 16px 32px;color:#8a7166;font-size:13px;">
+    <p>Memory Photo App · AI Memorial Image Demo</p>
+    <p style="margin-top:6px;">正式版将加入照片自动删除与隐私保护机制。</p>
+  </footer>
 
   <script>
     const homeSection = document.getElementById('homeSection');
@@ -217,6 +229,7 @@
     const restartBtn = document.getElementById('restartBtn');
     const fileInput = document.getElementById('fileInput');
     const fileList = document.getElementById('fileList');
+    const fileCount = document.getElementById('fileCount');
 
     let processingTimer = null;
 
@@ -236,6 +249,7 @@
         alert('最多只能上传 3 张照片。');
         fileInput.value = '';
         fileList.replaceChildren();
+        fileCount.textContent = '已选照片：0 张';
         generateBtn.disabled = true;
         return;
       }
@@ -250,6 +264,7 @@
         item.append(label, fileName);
         fileList.appendChild(item);
       });
+      fileCount.textContent = `已选照片：${files.length} 张`;
       generateBtn.disabled = !(files.length >= 1 && files.length <= 3);
     });
 
@@ -263,6 +278,7 @@
       clearTimeout(processingTimer);
       fileInput.value = '';
       fileList.replaceChildren();
+      fileCount.textContent = '已选照片：0 张';
       generateBtn.disabled = true;
       show(uploadSection);
     });
