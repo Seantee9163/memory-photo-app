@@ -32,30 +32,63 @@ const bitsPerSample = 16;
 const totalSamples = sampleRate * durationSeconds;
 const pcm = Buffer.alloc(totalSamples * 2);
 
-const bell = (t, at, freq, decay, gain) => {
+const tone = (t, at, freq, decay, gain, harmonic = 0.22) => {
   const dt = t - at;
   if (dt < 0) return 0;
-  return Math.sin(2 * Math.PI * freq * dt) * Math.exp(-dt * decay) * gain;
+  const env = Math.exp(-dt * decay);
+  return (
+    Math.sin(2 * Math.PI * freq * dt) +
+    harmonic * Math.sin(2 * Math.PI * freq * 2 * dt + 0.25)
+  ) * env * gain;
 };
+
+const softHit = (t, at, gain) => {
+  const dt = t - at;
+  if (dt < 0) return 0;
+  return Math.sin(2 * Math.PI * (68 - Math.min(dt, 0.4) * 38) * dt) * Math.exp(-dt * 7.5) * gain;
+};
+
+const pentatonic = [293.66, 329.63, 440.0, 493.88, 587.33];
+const melody = [
+  [0.55, 0, 0.032],
+  [2.25, 2, 0.028],
+  [4.05, 1, 0.027],
+  [5.75, 3, 0.034],
+  [7.2, 4, 0.042],
+  [8.55, 2, 0.032],
+  [10.3, 1, 0.026],
+  [12.05, 3, 0.034],
+  [13.4, 4, 0.03],
+];
 
 for (let i = 0; i < totalSamples; i += 1) {
   const t = i / sampleRate;
-  const fadeIn = Math.min(1, t / 0.7);
-  const fadeOut = Math.min(1, (durationSeconds - t) / 1.8);
+  const fadeIn = Math.min(1, t / 0.9);
+  const fadeOut = Math.min(1, (durationSeconds - t) / 1.6);
   const envelope = Math.max(0, Math.min(fadeIn, fadeOut));
 
-  const drone =
-    Math.sin(2 * Math.PI * 55 * t) * 0.07 +
-    Math.sin(2 * Math.PI * 82.5 * t + 0.5) * 0.035 +
-    Math.sin(2 * Math.PI * 110 * t + 1.2) * 0.018;
-  const pulse = Math.sin(2 * Math.PI * 0.18 * t) * 0.015;
-  const chimes =
-    bell(t, 2.85, 880, 3.2, 0.08) +
-    bell(t, 5.95, 1174.66, 3.8, 0.09) +
-    bell(t, 9.35, 1318.51, 4.0, 0.075) +
-    bell(t, 12.15, 987.77, 3.2, 0.07);
+  const air =
+    Math.sin(2 * Math.PI * 110 * t) * 0.008 +
+    Math.sin(2 * Math.PI * 165 * t + 0.8) * 0.005 +
+    Math.sin(2 * Math.PI * 220 * t + 1.4) * 0.003;
 
-  const sample = Math.max(-1, Math.min(1, (drone + pulse + chimes) * envelope));
+  let plucks = 0;
+  for (const [at, noteIndex, gain] of melody) {
+    plucks += tone(t, at, pentatonic[noteIndex], 4.6, gain, 0.18);
+  }
+
+  const bells =
+    tone(t, 5.2, 880, 3.1, 0.026, 0.35) +
+    tone(t, 8.25, 1174.66, 3.7, 0.034, 0.4) +
+    tone(t, 11.45, 987.77, 3.4, 0.026, 0.32);
+
+  const impacts =
+    softHit(t, 0.15, 0.028) +
+    softHit(t, 5.25, 0.038) +
+    softHit(t, 8.3, 0.032) +
+    softHit(t, 11.5, 0.025);
+
+  const sample = Math.max(-1, Math.min(1, (air + plucks + bells + impacts) * envelope));
   pcm.writeInt16LE(Math.round(sample * 32767), i * 2);
 }
 
@@ -75,4 +108,4 @@ wavHeader.write('data', 36);
 wavHeader.writeUInt32LE(pcm.length, 40);
 
 await writeFile(audioOutputPath, Buffer.concat([wavHeader, pcm]));
-console.log(`Generated original ambient soundtrack: ${audioOutputPath}`);
+console.log(`Generated restrained eastern-luxury soundtrack: ${audioOutputPath}`);
