@@ -22,5 +22,13 @@ fi
 mkdir -p output
 npm run typecheck
 npm run render
-test -s output/gold-jewelry-ad-v5-15s.mp4
-echo "Rendered $SCRIPT_DIR/output/gold-jewelry-ad-v5-15s.mp4"
+test -s output/Sean-Gold-Jewelry-V2.mp4
+
+mkdir -p output/keyframes
+for spec in "0.5s:15" "3s:90" "6.5s:195" "10s:300" "14s:420"; do
+  label="${spec%%:*}"
+  frame="${spec##*:}"
+  npx remotion still src/index.ts GoldJewelry15s "output/keyframes/${label}.png" --frame="$frame"
+done
+
+echo "Rendered $SCRIPT_DIR/output/Sean-Gold-Jewelry-V2.mp4 and five keyframes"

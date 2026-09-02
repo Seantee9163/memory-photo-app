@@ -15,7 +15,7 @@ bash video-shotcraft-test/render.sh
 The script installs the locked npm dependencies when needed, type-checks the source, restores the approved PNG, and writes the H.264 deliverable to:
 
 ```text
-video-shotcraft-test/output/gold-jewelry-approved-15s.mp4
+video-shotcraft-test/output/Sean-Gold-Jewelry-V2.mp4
 ```
 
-Generated output, browser caches, and dependencies are intentionally ignored by Git. Both manual GitHub Actions workflows render and upload the deliverable as the `Sean-Gold-Jewelry-Approved-01` artifact.
+The renderer also exports review frames at 0.5, 3, 6.5, 10, and 14 seconds under `output/keyframes`. Generated output, browser caches, and dependencies are intentionally ignored by Git.

@@ -9,7 +9,7 @@ const encodedPath = resolve(projectRoot, 'assets/gold-jewelry-approved.png.base6
 const imageOutputPath = resolve(projectRoot, 'public/gold-jewelry-approved.png');
 const sourceVideoPath = resolve(repoRoot, '转经筒2.mp4');
 const videoOutputPath = resolve(projectRoot, 'public/turning-cylinder-demo.mp4');
-const audioOutputPath = resolve(projectRoot, 'public/jewelry-ambient.wav');
+const audioOutputPath = resolve(projectRoot, 'public/jewelry-ambient-v2.wav');
 
 const encoded = await readFile(encodedPath, 'utf8');
 const approvedImage = Buffer.from(encoded.replace(/\s/g, ''), 'base64');
@@ -48,6 +48,22 @@ const softHit = (t, at, gain) => {
   return Math.sin(2 * Math.PI * (68 - Math.min(dt, 0.4) * 38) * dt) * Math.exp(-dt * 7.5) * gain;
 };
 
+// Deterministic filtered noise: a restrained hand-swish rather than a synthetic riser.
+const noise = (seed) => {
+  const value = Math.sin(seed * 12.9898) * 43758.5453;
+  return (value - Math.floor(value)) * 2 - 1;
+};
+
+const whoosh = (t, at, length, gain) => {
+  const dt = t - at;
+  if (dt < 0 || dt > length) return 0;
+  const shape = Math.sin(Math.PI * dt / length) ** 2;
+  return noise(Math.floor(t * 5200)) * shape * gain;
+};
+
+const metalClick = (t, at, gain) =>
+  tone(t, at, 1320, 24, gain, 0.42) + tone(t, at + 0.018, 1960, 31, gain * 0.48, 0.2);
+
 const pentatonic = [293.66, 329.63, 440.0, 493.88, 587.33];
 const melody = [
   [0.55, 0, 0.032],
@@ -82,13 +98,18 @@ for (let i = 0; i < totalSamples; i += 1) {
     tone(t, 8.25, 1174.66, 3.7, 0.034, 0.4) +
     tone(t, 11.45, 987.77, 3.4, 0.026, 0.32);
 
-  const impacts =
-    softHit(t, 0.15, 0.028) +
-    softHit(t, 5.25, 0.038) +
-    softHit(t, 8.3, 0.032) +
-    softHit(t, 11.5, 0.025);
+  const actionSound =
+    whoosh(t, 5.05, 0.72, 0.025) +
+    whoosh(t, 6.32, 0.48, 0.019) +
+    metalClick(t, 5.56, 0.032) +
+    metalClick(t, 6.84, 0.025) +
+    metalClick(t, 8.42, 0.022);
 
-  const sample = Math.max(-1, Math.min(1, (air + plucks + bells + impacts) * envelope));
+  const impacts = softHit(t, 0.08, 0.022) + softHit(t, 5.55, 0.055) + softHit(t, 8.48, 0.043) + softHit(t, 12.02, 0.035);
+
+  // The musical bed deliberately stays below the short, tactile action accents.
+  const music = air * 0.72 + plucks * 0.56 + bells * 0.46;
+  const sample = Math.max(-1, Math.min(1, (music + actionSound + impacts) * envelope));
   pcm.writeInt16LE(Math.round(sample * 32767), i * 2);
 }
 
