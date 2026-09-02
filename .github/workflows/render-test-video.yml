@@ -1,4 +1,4 @@
-name: Render approved jewelry video
+name: Render jewelry ad V4
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  render-test-video:
+  render-jewelry-ad-v4:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -32,23 +32,24 @@ jobs:
             npm install
           fi
 
-      - name: Install ffmpeg
+      - name: Install ffmpeg and CJK fonts
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ffmpeg
+          sudo apt-get install --yes ffmpeg fonts-noto-cjk
           ffmpeg -version
+          fc-list | grep -i "Noto Serif CJK" | head -5 || true
 
-      - name: Render approved jewelry video
+      - name: Render black-gold jewelry ad V4
         working-directory: video-shotcraft-test
         run: bash render.sh
 
       - name: Verify video output
-        run: test -s video-shotcraft-test/output/gold-jewelry-approved-15s.mp4
+        run: test -s video-shotcraft-test/output/gold-jewelry-ad-v4-15s.mp4
 
-      - name: Upload approved jewelry video
+      - name: Upload jewelry ad V4
         uses: actions/upload-artifact@v4
         with:
-          name: Sean-Gold-Jewelry-Approved-01
-          path: video-shotcraft-test/output/gold-jewelry-approved-15s.mp4
+          name: Sean-Gold-Jewelry-Ad-V4
+          path: video-shotcraft-test/output/gold-jewelry-ad-v4-15s.mp4
           if-no-files-found: error
           retention-days: 7
