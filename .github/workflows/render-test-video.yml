@@ -1,4 +1,4 @@
-name: Render jewelry ad V4
+name: Render jewelry ad V5
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  render-jewelry-ad-v4:
+  render-jewelry-ad-v5:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -39,17 +39,17 @@ jobs:
           ffmpeg -version
           fc-list | grep -i "Noto Serif CJK" | head -5 || true
 
-      - name: Render black-gold jewelry ad V4
+      - name: Render black-focus jewelry ad V5
         working-directory: video-shotcraft-test
         run: bash render.sh
 
       - name: Verify video output
-        run: test -s video-shotcraft-test/output/gold-jewelry-ad-v4-15s.mp4
+        run: test -s video-shotcraft-test/output/gold-jewelry-ad-v5-15s.mp4
 
-      - name: Upload jewelry ad V4
+      - name: Upload jewelry ad V5
         uses: actions/upload-artifact@v4
         with:
-          name: Sean-Gold-Jewelry-Ad-V4
-          path: video-shotcraft-test/output/gold-jewelry-ad-v4-15s.mp4
+          name: Sean-Gold-Jewelry-Ad-V5
+          path: video-shotcraft-test/output/gold-jewelry-ad-v5-15s.mp4
           if-no-files-found: error
           retention-days: 7
