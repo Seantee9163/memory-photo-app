@@ -8,7 +8,7 @@ export const VideoRoot: React.FC = () => (
     component={GoldJewelryVideo}
     durationInFrames={450}
     fps={30}
-    width={1280}
-    height={720}
+    width={1080}
+    height={1920}
   />
 );
