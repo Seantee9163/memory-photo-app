@@ -2,100 +2,97 @@ import React from 'react';
 import {
   AbsoluteFill,
   Easing,
+  Img,
   interpolate,
-  spring,
+  staticFile,
   useCurrentFrame,
-  useVideoConfig,
 } from 'remotion';
 
-const gold = '#e8be63';
-const softGold = '#fff0b0';
-
-const Jewelry: React.FC<{frame: number}> = ({frame}) => {
-  const turn = interpolate(frame, [0, 449], [-9, 14]);
-  const breathe = 1 + Math.sin(frame / 32) * 0.018;
-
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        left: '50%',
-        top: '48%',
-        width: 430,
-        height: 430,
-        transform: `translate(-50%, -50%) rotate(${turn}deg) scale(${breathe})`,
-        filter: 'drop-shadow(0 34px 24px rgba(0,0,0,.62))',
-      }}
-    >
-      <svg viewBox="0 0 430 430" width="100%" height="100%" aria-label="Procedural gold necklace">
-        <defs>
-          <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#7c4811" />
-            <stop offset=".22" stopColor="#ffe88f" />
-            <stop offset=".48" stopColor="#b46b16" />
-            <stop offset=".7" stopColor="#fff4b6" />
-            <stop offset="1" stopColor="#8b5010" />
-          </linearGradient>
-          <radialGradient id="gem">
-            <stop offset="0" stopColor="#fff" />
-            <stop offset=".24" stopColor="#fef5ce" />
-            <stop offset=".55" stopColor="#deb04c" />
-            <stop offset="1" stopColor="#70400b" />
-          </radialGradient>
-        </defs>
-        <ellipse cx="215" cy="192" rx="151" ry="170" fill="none" stroke="url(#metal)" strokeWidth="11" />
-        {Array.from({length: 22}, (_, i) => {
-          const angle = (Math.PI * (i + 1)) / 23;
-          const x = 215 - Math.cos(angle) * 151;
-          const y = 190 + Math.sin(angle) * 170;
-          return <circle key={i} cx={x} cy={y} r="7" fill="url(#gem)" />;
-        })}
-        <path d="M215 356 C185 324 170 355 215 404 C260 355 245 324 215 356Z" fill="url(#metal)" stroke="#ffe79a" strokeWidth="3" />
-        <circle cx="215" cy="370" r="16" fill="url(#gem)" />
-      </svg>
-    </div>
-  );
+const clamp = {
+  extrapolateLeft: 'clamp' as const,
+  extrapolateRight: 'clamp' as const,
 };
 
-const Copy: React.FC<{frame: number}> = ({frame}) => {
-  const firstOut = interpolate(frame, [185, 220], [1, 0], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
-  const secondIn = interpolate(frame, [215, 250], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
-  const finalIn = interpolate(frame, [355, 395], [0, 1], {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'});
-  const intro = spring({frame, fps: 30, config: {damping: 18}});
-
-  return (
-    <>
-      <div style={{position: 'absolute', left: 72, top: 70, letterSpacing: 7, color: gold, fontSize: 18}}>
-        AURUM · TEST FILM
-      </div>
-      <div style={{position: 'absolute', left: 72, bottom: 86, opacity: firstOut * intro, transform: `translateY(${(1 - intro) * 28}px)`}}>
-        <div style={{fontFamily: 'Georgia, serif', fontSize: 63, letterSpacing: 2}}>Crafted in light.</div>
-        <div style={{color: '#c8bda7', marginTop: 14, fontSize: 20, letterSpacing: 5}}>TIMELESS  ·  18K GOLD</div>
-      </div>
-      <div style={{position: 'absolute', right: 70, bottom: 92, width: 390, textAlign: 'right', opacity: secondIn * (1 - finalIn)}}>
-        <div style={{fontFamily: 'Georgia, serif', fontSize: 48}}>Every detail,<br />a quiet brilliance.</div>
-      </div>
-      <div style={{position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', background: `rgba(7,5,3,${finalIn * .78})`, opacity: finalIn}}>
-        <div style={{fontFamily: 'Georgia, serif', fontSize: 78, letterSpacing: 11, color: softGold}}>AURUM</div>
-        <div style={{fontSize: 18, letterSpacing: 8, marginTop: 18, color: '#d2bd91'}}>MADE TO ENDURE</div>
-      </div>
-    </>
-  );
-};
+const segment = (frame: number, from: number, to: number) =>
+  interpolate(frame, [from, to], [0, 1], {
+    ...clamp,
+    easing: Easing.inOut(Easing.cubic),
+  });
 
 export const GoldJewelryVideo: React.FC = () => {
   const frame = useCurrentFrame();
-  const {durationInFrames} = useVideoConfig();
-  const sweep = interpolate(frame % 150, [0, 150], [-30, 130], {easing: Easing.inOut(Easing.cubic)});
-  const fade = interpolate(frame, [durationInFrames - 18, durationInFrames - 1], [1, 0], {extrapolateLeft: 'clamp'});
+
+  const reveal = segment(frame, 0, 75);
+  const closeIn = segment(frame, 90, 210);
+  const macroIn = segment(frame, 210, 245);
+  const macroOut = segment(frame, 315, 360);
+  const returnHome = segment(frame, 330, 405);
+  const copyIn = segment(frame, 360, 390);
+
+  // All camera movement is applied to the single approved photograph. The
+  // product itself is never reconstructed, rotated, warped, or regenerated.
+  const baseScale = 1 + 0.1 * closeIn;
+  const macroScale = 1 + 0.14 * macroIn * (1 - macroOut);
+  const scale = (baseScale * macroScale) * (1 - returnHome) + returnHome;
+  const drift = Math.sin((frame - 90) / 34) * 8 * closeIn * (1 - macroIn);
+  const macroX = 24 * macroIn * (1 - macroOut);
+  const macroY = -84 * macroIn * (1 - macroOut);
+  const x = (drift + macroX) * (1 - returnHome);
+  const y = macroY * (1 - returnHome);
+
+  const sweepPosition = interpolate(frame, [12, 100], [-55, 155], clamp);
+  const sweepOpacity = reveal * (1 - segment(frame, 90, 125));
+  const vignette = interpolate(frame, [330, 420], [0.08, 0.28], clamp);
 
   return (
-    <AbsoluteFill style={{background: 'radial-gradient(circle at 52% 44%, #382916 0%, #120e09 42%, #050403 78%)', color: '#f7f0df', fontFamily: 'Arial, sans-serif', overflow: 'hidden', opacity: fade}}>
-      <div style={{position: 'absolute', inset: -300, background: `linear-gradient(${sweep}deg, transparent 43%, rgba(255,225,157,.11) 49%, transparent 55%)`}} />
-      <div style={{position: 'absolute', left: '50%', top: '48%', width: 390, height: 120, transform: 'translate(-50%, 105%)', background: 'rgba(209,158,73,.18)', filter: 'blur(42px)', borderRadius: '50%'}} />
-      <Jewelry frame={frame} />
-      <Copy frame={frame} />
-      <div style={{position: 'absolute', inset: 26, border: '1px solid rgba(232,190,99,.25)', pointerEvents: 'none'}} />
+    <AbsoluteFill style={{backgroundColor: '#030201', overflow: 'hidden'}}>
+      <Img
+        src={staticFile('gold-jewelry-approved.png')}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          opacity: reveal,
+          transform: `translate3d(${x}px, ${y}px, 0) scale(${scale})`,
+          transformOrigin: '52% 58%',
+        }}
+      />
+
+      <AbsoluteFill
+        style={{
+          opacity: sweepOpacity,
+          mixBlendMode: 'screen',
+          background: `linear-gradient(135deg, transparent ${sweepPosition - 12}%, rgba(255,224,145,0.04) ${sweepPosition - 4}%, rgba(255,240,184,0.2) ${sweepPosition}%, rgba(255,208,104,0.04) ${sweepPosition + 5}%, transparent ${sweepPosition + 13}%)`,
+        }}
+      />
+
+      <AbsoluteFill
+        style={{
+          background: `radial-gradient(ellipse at 50% 51%, transparent 38%, rgba(0,0,0,${vignette}) 100%)`,
+        }}
+      />
+
+      <div
+        style={{
+          position: 'absolute',
+          left: 90,
+          right: 90,
+          bottom: 116,
+          textAlign: 'center',
+          color: '#f5dda1',
+          opacity: copyIn,
+          transform: `translateY(${(1 - copyIn) * 10}px)`,
+          textShadow: '0 2px 18px rgba(0,0,0,0.95)',
+          fontFamily: '"Noto Serif SC", "Songti SC", "SimSun", serif',
+        }}
+      >
+        <div style={{fontSize: 38, fontWeight: 500, letterSpacing: 10}}>匠心成金</div>
+        <div style={{fontSize: 23, letterSpacing: 4, marginTop: 18, color: '#e7d4a7'}}>
+          每一道细节，都值得被看见
+        </div>
+      </div>
     </AbsoluteFill>
   );
 };

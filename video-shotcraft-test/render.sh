@@ -22,5 +22,5 @@ fi
 mkdir -p output
 npm run typecheck
 npm run render
-test -s output/gold-jewelry-15s.mp4
-echo "Rendered $SCRIPT_DIR/output/gold-jewelry-15s.mp4"
+test -s output/gold-jewelry-approved-15s.mp4
+echo "Rendered $SCRIPT_DIR/output/gold-jewelry-approved-15s.mp4"

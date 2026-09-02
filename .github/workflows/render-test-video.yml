@@ -1,4 +1,4 @@
-name: Render test video
+name: Render approved jewelry video
 
 on:
   workflow_dispatch:
@@ -38,17 +38,17 @@ jobs:
           sudo apt-get install --yes ffmpeg
           ffmpeg -version
 
-      - name: Render test video
+      - name: Render approved jewelry video
         working-directory: video-shotcraft-test
         run: bash render.sh
 
       - name: Verify video output
-        run: test -s video-shotcraft-test/output/gold-jewelry-15s.mp4
+        run: test -s video-shotcraft-test/output/gold-jewelry-approved-15s.mp4
 
-      - name: Upload test video
+      - name: Upload approved jewelry video
         uses: actions/upload-artifact@v4
         with:
-          name: Sean-Gold-Jewelry-Test-01
-          path: video-shotcraft-test/output/gold-jewelry-15s.mp4
+          name: Sean-Gold-Jewelry-Approved-01
+          path: video-shotcraft-test/output/gold-jewelry-approved-15s.mp4
           if-no-files-found: error
           retention-days: 7

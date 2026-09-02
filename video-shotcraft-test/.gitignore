@@ -1,3 +1,6 @@
 node_modules/
 output/
 .remotion/
+
+# Reconstructed from the review-safe text asset before rendering.
+public/gold-jewelry-approved.png
