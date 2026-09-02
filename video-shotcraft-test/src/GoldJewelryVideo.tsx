@@ -11,262 +11,167 @@ import {
   useCurrentFrame,
 } from 'remotion';
 
-const clamp = {
-  extrapolateLeft: 'clamp' as const,
-  extrapolateRight: 'clamp' as const,
-};
+const clamp = {extrapolateLeft: 'clamp' as const, extrapolateRight: 'clamp' as const};
+const ease = (frame: number, input: [number, number], output: [number, number]) =>
+  interpolate(frame, input, output, {...clamp, easing: Easing.inOut(Easing.cubic)});
 
-const tween = (frame: number, from: number, to: number) =>
-  interpolate(frame, [from, to], [0, 1], {
-    ...clamp,
-    easing: Easing.inOut(Easing.cubic),
-  });
+const sceneOpacity = (frame: number, duration: number, fadeIn = 8, fadeOut = 8) =>
+  Math.min(ease(frame, [0, fadeIn], [0, 1]), ease(frame, [duration - fadeOut, duration], [1, 0]));
 
-const fade = (frame: number, duration: number, edge = 10) => {
-  const fadeIn = interpolate(frame, [0, edge], [0, 1], clamp);
-  const fadeOut = interpolate(frame, [duration - edge, duration], [1, 0], clamp);
-  return Math.min(fadeIn, fadeOut);
-};
-
-const Spotlight: React.FC<{strength?: number}> = ({strength = 1}) => (
+const Atmosphere: React.FC<{sweep?: number; glow?: number}> = ({sweep = -400, glow = 0.14}) => (
   <>
     <AbsoluteFill
       style={{
-        background:
-          'radial-gradient(ellipse at 50% 43%, rgba(255,196,92,.18), transparent 24%), radial-gradient(ellipse at 50% 48%, transparent 24%, rgba(0,0,0,.42) 58%, rgba(0,0,0,.94) 100%)',
-        opacity: strength,
+        background: `radial-gradient(ellipse 48% 38% at 50% 45%, rgba(139,82,22,${glow}), rgba(24,13,5,.08) 55%, transparent 76%)`,
+      }}
+    />
+    <div
+      style={{
+        position: 'absolute',
+        top: -180,
+        bottom: -180,
+        left: sweep,
+        width: 150,
+        transform: 'rotate(9deg)',
+        background: 'linear-gradient(90deg, transparent, rgba(255,225,157,.14), transparent)',
+        filter: 'blur(22px)',
+        mixBlendMode: 'screen',
       }}
     />
     <AbsoluteFill
       style={{
-        background: 'linear-gradient(180deg, rgba(0,0,0,.12), transparent 32%, transparent 67%, rgba(0,0,0,.78))',
+        background:
+          'radial-gradient(ellipse 76% 62% at 50% 46%, transparent 35%, rgba(0,0,0,.42) 72%, #000 100%), linear-gradient(180deg, rgba(0,0,0,.18), transparent 28%, transparent 68%, rgba(0,0,0,.72))',
       }}
     />
   </>
 );
 
-const BigCopy: React.FC<{children: React.ReactNode; opacity: number; bottom?: number}> = ({children, opacity, bottom = 108}) => (
+const Copy: React.FC<{children: React.ReactNode; opacity: number; kicker?: string}> = ({children, opacity, kicker}) => (
   <div
     style={{
       position: 'absolute',
-      left: 64,
-      right: 64,
-      bottom,
+      left: 70,
+      right: 70,
+      bottom: 108,
       textAlign: 'center',
-      color: '#f4d78b',
-      fontSize: 62,
-      fontWeight: 600,
-      letterSpacing: 8,
-      lineHeight: 1.22,
       opacity,
-      textShadow: '0 4px 28px rgba(0,0,0,.98)',
+      transform: `translateY(${(1 - opacity) * 10}px)`,
       fontFamily: '"Noto Serif SC", "Songti SC", "SimSun", serif',
+      textShadow: '0 4px 26px #000',
     }}
   >
-    {children}
+    {kicker ? <div style={{fontSize: 18, letterSpacing: 7, color: '#a88750', marginBottom: 15}}>{kicker}</div> : null}
+    <div style={{fontSize: 54, fontWeight: 600, letterSpacing: 9, color: '#efd28a'}}>{children}</div>
   </div>
 );
 
-const HeroScene: React.FC<{duration: number}> = ({duration}) => {
+const StillScene: React.FC<{
+  duration: number;
+  startScale: number;
+  endScale: number;
+  startX?: number;
+  endX?: number;
+  startY?: number;
+  endY?: number;
+  origin?: string;
+  copy: string;
+  captionAt?: number;
+  brightness?: number;
+}> = ({duration, startScale, endScale, startX = 0, endX = 0, startY = 0, endY = 0, origin = '50% 49%', copy, captionAt = 14, brightness = 0.8}) => {
   const frame = useCurrentFrame();
-  const opacity = fade(frame, duration, 12);
-  const zoom = interpolate(frame, [0, duration], [1.14, 1.04], clamp);
-  const reveal = tween(frame, 0, 28);
+  const progress = ease(frame, [0, duration], [0, 1]);
+  const breathe = Math.sin((frame / duration) * Math.PI) * 0.006;
+  const sweep = ease(frame, [duration * 0.18, duration * 0.78], [-260, 1190]);
 
   return (
-    <AbsoluteFill style={{backgroundColor: '#000', opacity}}>
+    <AbsoluteFill style={{backgroundColor: '#020201', opacity: sceneOpacity(frame, duration), overflow: 'hidden'}}>
       <Img
         src={staticFile('gold-jewelry-approved.png')}
         style={{
           width: '100%',
           height: '100%',
           objectFit: 'cover',
-          transform: `scale(${zoom})`,
-          filter: `brightness(${0.48 + reveal * 0.5}) contrast(1.14) saturate(1.12)`,
+          transformOrigin: origin,
+          transform: `translate3d(${startX + (endX - startX) * progress}px, ${startY + (endY - startY) * progress}px, 0) scale(${startScale + (endScale - startScale) * progress + breathe})`,
+          filter: `brightness(${brightness}) contrast(1.28) saturate(.9) sepia(.06)`,
         }}
       />
-      <Spotlight strength={0.96} />
-      <BigCopy opacity={tween(frame, 24, 48)}>916黄金 · 转经筒</BigCopy>
-    </AbsoluteFill>
-  );
-};
-
-const MacroScene: React.FC<{duration: number}> = ({duration}) => {
-  const frame = useCurrentFrame();
-  const opacity = fade(frame, duration, 10);
-  const scale = interpolate(frame, [0, duration], [1.72, 1.92], clamp);
-  const x = interpolate(frame, [0, duration], [-30, -74], clamp);
-  const y = interpolate(frame, [0, duration], [124, 72], clamp);
-
-  return (
-    <AbsoluteFill style={{backgroundColor: '#000', opacity}}>
-      <Img
-        src={staticFile('gold-jewelry-approved.png')}
-        style={{
-          position: 'absolute',
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          transform: `translate3d(${x}px, ${y}px, 0) scale(${scale})`,
-          transformOrigin: '50% 46%',
-          filter: 'brightness(.94) contrast(1.18) saturate(1.14)',
-        }}
-      />
-      <Spotlight strength={0.88} />
-      <BigCopy opacity={tween(frame, 18, 42)} bottom={96}>纹理，不只是装饰</BigCopy>
+      <Atmosphere sweep={sweep} />
+      <Copy opacity={ease(frame, [captionAt, captionAt + 20], [0, 1])}>{copy}</Copy>
     </AbsoluteFill>
   );
 };
 
 const RotationScene: React.FC<{duration: number}> = ({duration}) => {
   const frame = useCurrentFrame();
-  const opacity = fade(frame, duration, 8);
-  const copy = tween(frame, 10, 30);
-  const zoom = interpolate(frame, [0, duration], [2.42, 2.62], clamp);
-  const driftX = interpolate(frame, [0, duration], [18, -18], clamp);
-  const driftY = interpolate(frame, [0, duration], [10, -12], clamp);
+  const phase = ease(frame, [0, duration], [0, 1]);
+  const settle = ease(frame, [duration - 24, duration], [0, 1]);
+  const sweep = ease(frame, [18, duration - 18], [-220, 1160]);
 
   return (
-    <AbsoluteFill style={{backgroundColor: '#000', opacity, overflow: 'hidden'}}>
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: 20,
-          height: 1370,
-          overflow: 'hidden',
-          background: '#000',
-          WebkitMaskImage: 'radial-gradient(ellipse 64% 57% at 64% 32%, #000 42%, rgba(0,0,0,.96) 57%, transparent 82%)',
-          maskImage: 'radial-gradient(ellipse 64% 57% at 64% 32%, #000 42%, rgba(0,0,0,.96) 57%, transparent 82%)',
-        }}
-      >
-        <OffthreadVideo
-          src={staticFile('turning-cylinder-demo.mp4')}
-          trimBefore={210}
-          trimAfter={315}
-          playbackRate={0.88}
-          volume={0.03}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            objectPosition: '70% 27%',
-            transform: `translate3d(${driftX}px, ${driftY}px, 0) scale(${zoom})`,
-            transformOrigin: '70% 27%',
-            filter: 'brightness(.48) contrast(1.5) saturate(1.18) sepia(.16)',
-          }}
-        />
-        <AbsoluteFill
-          style={{
-            background:
-              'radial-gradient(circle at 66% 28%, rgba(255,206,112,.28), transparent 15%), radial-gradient(ellipse at 64% 30%, transparent 17%, rgba(0,0,0,.28) 39%, rgba(0,0,0,.9) 77%)',
-            mixBlendMode: 'screen',
-          }}
-        />
-      </div>
-
-      <AbsoluteFill
-        style={{
-          background:
-            'radial-gradient(circle at 63% 24%, rgba(255,194,74,.16), transparent 18%), linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.02) 46%, rgba(0,0,0,.88) 78%, #000)',
-          pointerEvents: 'none',
-        }}
-      />
-
-      <BigCopy opacity={copy} bottom={112}>一甩，即转</BigCopy>
-    </AbsoluteFill>
-  );
-};
-
-const DetailScene: React.FC<{duration: number}> = ({duration}) => {
-  const frame = useCurrentFrame();
-  const opacity = fade(frame, duration, 8);
-  const scale = interpolate(frame, [0, duration], [1.9, 1.7], clamp);
-  const x = interpolate(frame, [0, duration], [170, 96], clamp);
-  const y = interpolate(frame, [0, duration], [60, 90], clamp);
-
-  return (
-    <AbsoluteFill style={{backgroundColor: '#000', opacity}}>
-      <Img
-        src={staticFile('gold-jewelry-approved.png')}
+    <AbsoluteFill style={{backgroundColor: '#010100', opacity: sceneOpacity(frame, duration, 6, 10), overflow: 'hidden'}}>
+      <OffthreadVideo
+        src={staticFile('turning-cylinder-demo.mp4')}
+        trimBefore={150}
+        trimAfter={294}
+        playbackRate={1.02}
+        muted
         style={{
           width: '100%',
           height: '100%',
           objectFit: 'cover',
-          transform: `translate3d(${x}px, ${y}px, 0) scale(${scale})`,
-          transformOrigin: '58% 59%',
-          filter: 'brightness(.92) contrast(1.18) saturate(1.18)',
+          objectPosition: '69% 28%',
+          transformOrigin: '69% 28%',
+          transform: `translate3d(${16 - phase * 24}px, ${12 - phase * 18 + settle * 4}px, 0) scale(${2.5 + Math.sin(phase * Math.PI) * 0.035})`,
+          filter: 'brightness(.5) contrast(1.52) saturate(.88) sepia(.14)',
         }}
       />
-      <Spotlight strength={0.92} />
-      <BigCopy opacity={tween(frame, 12, 34)} bottom={100}>活动结构 · 真实可转</BigCopy>
+      <Atmosphere sweep={sweep} glow={0.1} />
+      <AbsoluteFill style={{background: 'radial-gradient(circle at 67% 28%, rgba(255,211,120,.17), transparent 15%)', mixBlendMode: 'screen'}} />
+      <Copy opacity={ease(frame, [15, 34], [0, 1])} kicker="MECHANICAL MOTION">一甩，即转</Copy>
     </AbsoluteFill>
   );
 };
 
 const EndScene: React.FC<{duration: number}> = ({duration}) => {
   const frame = useCurrentFrame();
-  const imageIn = tween(frame, 0, 22);
-  const copyIn = tween(frame, 18, 42);
-  const zoom = interpolate(frame, [0, duration], [1.12, 1.04], clamp);
-
+  const inValue = ease(frame, [0, 20], [0, 1]);
+  const scale = ease(frame, [0, duration], [1.1, 1.04]);
+  const sweep = ease(frame, [12, 65], [-250, 1180]);
   return (
-    <AbsoluteFill style={{backgroundColor: '#000'}}>
+    <AbsoluteFill style={{backgroundColor: '#010100', overflow: 'hidden'}}>
       <Img
         src={staticFile('gold-jewelry-approved.png')}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          opacity: imageIn,
-          transform: `scale(${zoom})`,
-          filter: 'brightness(.74) contrast(1.15) saturate(1.12)',
-        }}
+        style={{width: '100%', height: '100%', objectFit: 'cover', opacity: inValue, transform: `scale(${scale})`, filter: 'brightness(.72) contrast(1.3) saturate(.88) sepia(.05)'}}
       />
-      <Spotlight strength={0.97} />
-      <div
-        style={{
-          position: 'absolute',
-          left: 54,
-          right: 54,
-          bottom: 112,
-          textAlign: 'center',
-          opacity: copyIn,
-          transform: `translateY(${(1 - copyIn) * 12}px)`,
-          textShadow: '0 3px 28px rgba(0,0,0,.98)',
-          fontFamily: '"Noto Serif SC", "Songti SC", "SimSun", serif',
-        }}
-      >
-        <div style={{fontSize: 78, fontWeight: 700, letterSpacing: 12, color: '#f4d27d'}}>匠心成金</div>
-        <div style={{fontSize: 38, fontWeight: 500, letterSpacing: 7, marginTop: 20, color: '#efe0b8'}}>
-          转动之间，见工艺
-        </div>
+      <Atmosphere sweep={sweep} glow={0.12} />
+      <div style={{position: 'absolute', left: 60, right: 60, bottom: 102, opacity: inValue, textAlign: 'center', fontFamily: '"Noto Serif SC", "Songti SC", serif', textShadow: '0 4px 30px #000'}}>
+        <div style={{fontSize: 57, color: '#efd28a', fontWeight: 600, letterSpacing: 8}}>黄金，也可以有机械感</div>
+        <div style={{height: 1, width: 110, margin: '24px auto 20px', background: 'linear-gradient(90deg, transparent, #b9914b, transparent)'}} />
+        <div style={{fontSize: 22, letterSpacing: 8, color: '#b69a67'}}>SEAN · GOLD JEWELRY</div>
       </div>
     </AbsoluteFill>
   );
 };
 
-export const GoldJewelryVideo: React.FC = () => {
-  return (
-    <AbsoluteFill style={{backgroundColor: '#000', overflow: 'hidden'}}>
-      <Html5Audio src={staticFile('jewelry-ambient.wav')} volume={0.62} />
-
-      <Sequence from={0} durationInFrames={84}>
-        <HeroScene duration={84} />
-      </Sequence>
-      <Sequence from={74} durationInFrames={94}>
-        <MacroScene duration={94} />
-      </Sequence>
-      <Sequence from={158} durationInFrames={122}>
-        <RotationScene duration={122} />
-      </Sequence>
-      <Sequence from={270} durationInFrames={84}>
-        <DetailScene duration={84} />
-      </Sequence>
-      <Sequence from={344} durationInFrames={106}>
-        <EndScene duration={106} />
-      </Sequence>
-    </AbsoluteFill>
-  );
-};
+export const GoldJewelryVideo: React.FC = () => (
+  <AbsoluteFill style={{backgroundColor: '#000', overflow: 'hidden'}}>
+    <Html5Audio src={staticFile('jewelry-ambient-v2.wav')} volume={0.48} />
+    <Sequence from={0} durationInFrames={60}>
+      <StillScene duration={60} startScale={1.08} endScale={1.13} startY={18} endY={-5} copy="细节，自会说话" brightness={0.76} />
+    </Sequence>
+    <Sequence from={60} durationInFrames={90}>
+      <StillScene duration={90} startScale={1.38} endScale={1.48} startX={-22} endX={-42} startY={72} endY={40} origin="49% 49%" copy="机械旋转结构" brightness={0.79} />
+    </Sequence>
+    <Sequence from={150} durationInFrames={120}>
+      <RotationScene duration={120} />
+    </Sequence>
+    <Sequence from={270} durationInFrames={90}>
+      <StillScene duration={90} startScale={1.72} endScale={1.64} startX={116} endX={88} startY={46} endY={70} origin="57% 56%" copy="细节，自会说话" brightness={0.78} />
+    </Sequence>
+    <Sequence from={360} durationInFrames={90}>
+      <EndScene duration={90} />
+    </Sequence>
+  </AbsoluteFill>
+);

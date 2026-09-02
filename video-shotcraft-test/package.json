@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "prerender": "node scripts/prepare-approved-image.mjs",
-    "render": "remotion render src/index.ts GoldJewelry15s output/gold-jewelry-ad-v5-15s.mp4 --codec=h264 --crf=14 --pixel-format=yuv420p",
+    "render": "remotion render src/index.ts GoldJewelry15s output/Sean-Gold-Jewelry-V2.mp4 --codec=h264 --crf=14 --pixel-format=yuv420p",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
