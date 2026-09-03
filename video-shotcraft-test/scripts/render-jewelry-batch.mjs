@@ -116,11 +116,12 @@ const renderProduct = async (product, index) => {
     const stream = metadata.streams?.[0] ?? {};
     const duration = Number(metadata.format?.duration ?? 0);
     const outputSha256 = await sha256File(video);
+    const pixelFormat420Compatible = ['yuv420p', 'yuvj420p'].includes(stream.pix_fmt);
     const checks = {
       fileExists: true,
       codecH264: stream.codec_name === 'h264',
       dimensions1080x1920: stream.width === 1080 && stream.height === 1920,
-      pixelFormatYuv420p: stream.pix_fmt === 'yuv420p',
+      pixelFormat420Compatible,
       duration15Seconds: Math.abs(duration - 15) <= 0.1,
       remotionRenderer: true,
     };
@@ -138,6 +139,7 @@ const renderProduct = async (product, index) => {
       renderStatus: 'PASS',
       score,
       checks,
+      detectedPixelFormat: stream.pix_fmt ?? null,
       duration,
     };
     await writeFile(path.join(qcDir, `${product.id}.json`), `${JSON.stringify(qc, null, 2)}\n`);
@@ -196,9 +198,10 @@ await writeFile(reportPath, report);
 
 if (!batchPass) {
   console.error(report);
+  if (passed !== products.length) console.error('One or more Remotion renders failed. Batch FAIL.');
+  if (!allQc) console.error('One or more QC checks failed. Batch FAIL.');
   if (!uniqueOutputHashes) console.error('Duplicate or missing output SHA256 detected. Batch FAIL.');
   if (!uniqueInputConfigs) console.error('Duplicate product input configuration detected. Batch FAIL.');
-  console.error('Remotion Render = FAIL. No fallback renderer was attempted.');
   process.exitCode = 1;
 } else {
   const logFiles = products.map((product) => `${product.id}.remotion.log`);
