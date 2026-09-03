@@ -1,0 +1,67 @@
+name: Render jewelry batch test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-jewelry-batch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MAX_CONCURRENT_RENDERS: 2
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: video-shotcraft-test/package-lock.json
+
+      - name: Install renderer and system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg fonts-noto-cjk libgbm1 libnss3 zip
+          npm ci --no-audit --no-fund --prefix video-shotcraft-test
+          npx --prefix video-shotcraft-test remotion browser ensure
+          ffmpeg -version
+
+      - name: Type-check Remotion source
+        run: npm run typecheck --prefix video-shotcraft-test
+
+      - name: Run complete three-product batch
+        run: npm run render:batch --prefix video-shotcraft-test
+
+      - name: Verify batch delivery
+        run: |
+          test "$(find batch-output/final -maxdepth 1 -type f -name '*.mp4' | wc -l)" -eq 3
+          test "$(find batch-output/previews -maxdepth 1 -type f -name '*.jpg' | wc -l)" -eq 3
+          test "$(find batch-output/qc-reports -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 3
+          test "$(find batch-output -maxdepth 1 -type f -name '*.remotion.log' | wc -l)" -eq 3
+          test "$(find batch-output/props -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 3
+          test -s batch-output/batch-report.md
+          test -s batch-output/Sean-Jewelry-Batch.zip
+          ! grep -q '"renderStatus": "FAIL"' batch-output/qc-reports/*.json
+          grep -q 'Unique product input configs: PASS' batch-output/batch-report.md
+          grep -q 'Unique output SHA256 hashes: PASS' batch-output/batch-report.md
+
+      - name: Upload batch artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sean-Jewelry-Batch-Test
+          path: |
+            batch-output/final/
+            batch-output/previews/
+            batch-output/props/
+            batch-output/*.remotion.log
+            batch-output/batch-report.md
+            batch-output/qc-reports/
+            batch-output/Sean-Jewelry-Batch.zip
+          if-no-files-found: error
+          retention-days: 7
