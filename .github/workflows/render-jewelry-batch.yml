@@ -34,19 +34,24 @@ jobs:
       - name: Type-check Remotion source
         run: npm run typecheck --prefix video-shotcraft-test
 
-      - name: Run complete three-product batch
+      - name: Run real product batch
         run: npm run render:batch --prefix video-shotcraft-test
 
       - name: Verify batch delivery
         run: |
-          test "$(find batch-output/final -maxdepth 1 -type f -name '*.mp4' | wc -l)" -eq 3
-          test "$(find batch-output/previews -maxdepth 1 -type f -name '*.jpg' | wc -l)" -eq 3
-          test "$(find batch-output/qc-reports -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 3
-          test "$(find batch-output -maxdepth 1 -type f -name '*.remotion.log' | wc -l)" -eq 3
-          test "$(find batch-output/props -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 3
+          EXPECTED_COUNT=$(node -e "const p=require('./video-shotcraft-test/batch-products.json'); process.stdout.write(String(p.length))")
+          echo "Expected real products: $EXPECTED_COUNT"
+          test "$EXPECTED_COUNT" -ge 1
+          test "$(find batch-output/final -maxdepth 1 -type f -name '*.mp4' | wc -l)" -eq "$EXPECTED_COUNT"
+          test "$(find batch-output/previews -maxdepth 1 -type f -name '*.jpg' | wc -l)" -eq "$EXPECTED_COUNT"
+          test "$(find batch-output/qc-reports -maxdepth 1 -type f -name '*.json' | wc -l)" -eq "$EXPECTED_COUNT"
+          test "$(find batch-output -maxdepth 1 -type f -name '*.remotion.log' | wc -l)" -eq "$EXPECTED_COUNT"
+          test "$(find batch-output/props -maxdepth 1 -type f -name '*.json' | wc -l)" -eq "$EXPECTED_COUNT"
           test -s batch-output/batch-report.md
           test -s batch-output/Sean-Jewelry-Batch.zip
           ! grep -q '"renderStatus": "FAIL"' batch-output/qc-reports/*.json
+          grep -q 'Unique product image identities: PASS' batch-output/batch-report.md
+          grep -q 'Unique product video identities: PASS' batch-output/batch-report.md
           grep -q 'Unique product input configs: PASS' batch-output/batch-report.md
           grep -q 'Unique output SHA256 hashes: PASS' batch-output/batch-report.md
 
