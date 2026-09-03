@@ -40,10 +40,13 @@ jobs:
       - name: Verify batch delivery
         run: |
           test "$(find batch-output/final -maxdepth 1 -type f -name '*.mp4' | wc -l)" -eq 3
+          test "$(find batch-output/previews -maxdepth 1 -type f -name '*.jpg' | wc -l)" -eq 3
           test "$(find batch-output/qc-reports -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 3
           test -s batch-output/batch-report.md
           test -s batch-output/Sean-Jewelry-Batch.zip
           ! grep -q '"renderStatus": "FAIL"' batch-output/qc-reports/*.json
+          grep -q 'Unique product input configs: PASS' batch-output/batch-report.md
+          grep -q 'Unique output SHA256 hashes: PASS' batch-output/batch-report.md
 
       - name: Upload batch artifact
         if: ${{ always() }}
@@ -52,6 +55,7 @@ jobs:
           name: Sean-Jewelry-Batch-Test
           path: |
             batch-output/final/
+            batch-output/previews/
             batch-output/batch-report.md
             batch-output/qc-reports/
             batch-output/Sean-Jewelry-Batch.zip
