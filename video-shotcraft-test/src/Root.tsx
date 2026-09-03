@@ -1,6 +1,6 @@
 import React from 'react';
 import {Composition} from 'remotion';
-import {GoldJewelryVideo} from './GoldJewelryVideo';
+import {defaultGoldJewelryProps, GoldJewelryVideo} from './GoldJewelryVideo';
 
 export const VideoRoot: React.FC = () => (
   <Composition
@@ -10,5 +10,6 @@ export const VideoRoot: React.FC = () => (
     fps={30}
     width={1080}
     height={1920}
+    defaultProps={defaultGoldJewelryProps}
   />
 );
