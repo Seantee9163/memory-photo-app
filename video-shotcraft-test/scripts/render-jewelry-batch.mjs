@@ -16,10 +16,19 @@ const reportPath = path.join(outputDir, 'batch-report.md');
 const zipPath = path.join(outputDir, 'Sean-Jewelry-Batch.zip');
 const maxConcurrent = Number(process.env.MAX_CONCURRENT_RENDERS ?? 2);
 
-if (maxConcurrent !== 2) throw new Error(`MAX_CONCURRENT_RENDERS must be 2 (received ${maxConcurrent})`);
+if (!Number.isInteger(maxConcurrent) || maxConcurrent < 1 || maxConcurrent > 4) {
+  throw new Error(`MAX_CONCURRENT_RENDERS must be an integer from 1 to 4 (received ${maxConcurrent})`);
+}
 
 const products = JSON.parse(await readFile(path.join(projectDir, 'batch-products.json'), 'utf8'));
-if (products.length !== 3) throw new Error(`Expected exactly 3 products, received ${products.length}`);
+if (!Array.isArray(products) || products.length < 1 || products.length > 20) {
+  throw new Error(`batch-products.json must contain 1 to 20 real products (received ${products?.length ?? 'invalid'})`);
+}
+
+const productIds = products.map((product) => product.id);
+if (new Set(productIds).size !== productIds.length) {
+  throw new Error('Duplicate product ids detected in batch-products.json.');
+}
 
 const sha256Buffer = (buffer) => createHash('sha256').update(buffer).digest('hex');
 const sha256File = async (file) => sha256Buffer(await readFile(file));
@@ -45,9 +54,24 @@ const mediaProvenance = async (product) => {
   );
 };
 
+const getMediaHash = (items, kind) => items.find((item) => item.kind === kind)?.sha256 ?? '';
+
 await rm(outputDir, {recursive: true, force: true});
 await Promise.all([finalDir, qcDir, previewDir, propsDir].map((dir) => mkdir(dir, {recursive: true})));
 await exec('node', ['scripts/prepare-approved-image.mjs'], {cwd: projectDir});
+
+const preparedMedia = await Promise.all(products.map((product) => mediaProvenance(product)));
+const imageHashes = preparedMedia.map((items) => getMediaHash(items, 'image'));
+const videoHashes = preparedMedia.map((items) => getMediaHash(items, 'video'));
+const uniqueProductImages = new Set(imageHashes).size === products.length;
+const uniqueProductVideos = new Set(videoHashes).size === products.length;
+
+if (products.length > 1 && (!uniqueProductImages || !uniqueProductVideos)) {
+  const duplicateReport = `# Sean Jewelry Batch Test\n\n- Batch workflow: FAIL\n- Configured products: ${products.length}\n- Unique product image identities: ${uniqueProductImages ? 'PASS' : 'FAIL'}\n- Unique product video identities: ${uniqueProductVideos ? 'PASS' : 'FAIL'}\n\nThe batch was stopped before rendering because multiple product entries reuse the same underlying product image or product video. Different copy, names, crops, or visual variants do not make them different products. Add genuinely different source media for each physical product.\n`;
+  await writeFile(reportPath, duplicateReport);
+  console.error(duplicateReport);
+  throw new Error('Duplicate product media detected. Refusing to present one physical product as multiple products.');
+}
 
 const results = new Array(products.length);
 let cursor = 0;
@@ -57,7 +81,7 @@ const renderProduct = async (product, index) => {
   const preview = path.join(previewDir, `${product.id}.jpg`);
   const log = path.join(outputDir, `${product.id}.remotion.log`);
   const propsPath = path.join(propsDir, `${product.id}.json`);
-  const inputMedia = await mediaProvenance(product);
+  const inputMedia = preparedMedia[index];
   const inputConfigSha256 = sha256Json(product);
   const inputProps = {
     productId: product.id,
@@ -103,6 +127,7 @@ const renderProduct = async (product, index) => {
     );
     await writeFile(log, `${rendered.stdout}\n${rendered.stderr}`);
     await exec('ffmpeg', ['-y', '-ss', '7.5', '-i', video, '-frames:v', '1', '-q:v', '2', preview]);
+
     const probe = await exec('ffprobe', [
       '-v',
       'error',
@@ -171,7 +196,7 @@ const worker = async () => {
     await renderProduct(products[index], index);
   }
 };
-await Promise.all(Array.from({length: maxConcurrent}, worker));
+await Promise.all(Array.from({length: Math.min(maxConcurrent, products.length)}, worker));
 
 const passedResults = results.filter((result) => result.renderStatus === 'PASS');
 const passed = passedResults.length;
@@ -179,12 +204,16 @@ const outputHashes = passedResults.map((result) => result.outputSha256).filter(B
 const uniqueOutputHashes = outputHashes.length === products.length && new Set(outputHashes).size === products.length;
 const uniqueInputConfigs = new Set(results.map((result) => result.inputConfigSha256)).size === products.length;
 const allQc = passed === products.length && results.every((result) => result.score >= 90);
-const batchPass = passed === products.length && allQc && uniqueOutputHashes && uniqueInputConfigs;
+const batchPass =
+  passed === products.length &&
+  allQc &&
+  uniqueOutputHashes &&
+  uniqueInputConfigs &&
+  uniqueProductImages &&
+  uniqueProductVideos;
 
 const mediaSummary = (r) =>
-  r.inputMedia
-    .map((item) => `${item.kind}:${item.asset} (${item.sha256})`)
-    .join('<br>');
+  r.inputMedia.map((item) => `${item.kind}:${item.asset} (${item.sha256})`).join('<br>');
 
 const tableRows = results
   .map(
@@ -193,13 +222,15 @@ const tableRows = results
   )
   .join('\n');
 
-const report = `# Sean Jewelry Batch Test\n\n- Batch workflow: ${batchPass ? 'PASS' : 'FAIL'}\n- True Remotion render: ${passed === products.length ? 'PASS' : 'FAIL'}\n- Products rendered: ${passed}/${products.length}\n- All QC >=90: ${allQc ? 'YES' : 'NO'}\n- Unique product input configs: ${uniqueInputConfigs ? 'PASS' : 'FAIL'}\n- Unique output SHA256 hashes: ${uniqueOutputHashes ? 'PASS' : 'FAIL'}\n- MAX_CONCURRENT_RENDERS: ${maxConcurrent}\n\n| Product ID | Product Name | Consumed media + SHA256 | Input config SHA256 | Output MP4 | Output SHA256 | Remotion log | Remotion Render | QC score |\n|---|---|---|---|---|---|---|---:|---:|\n${tableRows}\n`;
+const report = `# Sean Jewelry Batch Test\n\n- Batch workflow: ${batchPass ? 'PASS' : 'FAIL'}\n- Configured products: ${products.length}\n- True Remotion render: ${passed === products.length ? 'PASS' : 'FAIL'}\n- Products rendered: ${passed}/${products.length}\n- All QC >=90: ${allQc ? 'YES' : 'NO'}\n- Unique product image identities: ${uniqueProductImages ? 'PASS' : 'FAIL'}\n- Unique product video identities: ${uniqueProductVideos ? 'PASS' : 'FAIL'}\n- Unique product input configs: ${uniqueInputConfigs ? 'PASS' : 'FAIL'}\n- Unique output SHA256 hashes: ${uniqueOutputHashes ? 'PASS' : 'FAIL'}\n- MAX_CONCURRENT_RENDERS: ${maxConcurrent}\n\n| Product ID | Product Name | Consumed media + SHA256 | Input config SHA256 | Output MP4 | Output SHA256 | Remotion log | Remotion Render | QC score |\n|---|---|---|---|---|---|---|---:|---:|\n${tableRows}\n`;
 await writeFile(reportPath, report);
 
 if (!batchPass) {
   console.error(report);
   if (passed !== products.length) console.error('One or more Remotion renders failed. Batch FAIL.');
   if (!allQc) console.error('One or more QC checks failed. Batch FAIL.');
+  if (!uniqueProductImages) console.error('Duplicate product image identity detected. Batch FAIL.');
+  if (!uniqueProductVideos) console.error('Duplicate product video identity detected. Batch FAIL.');
   if (!uniqueOutputHashes) console.error('Duplicate or missing output SHA256 detected. Batch FAIL.');
   if (!uniqueInputConfigs) console.error('Duplicate product input configuration detected. Batch FAIL.');
   process.exitCode = 1;
