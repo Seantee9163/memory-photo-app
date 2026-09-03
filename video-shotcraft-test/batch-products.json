@@ -13,35 +13,5 @@
     "endTitle": "匠心成金",
     "endSubtitle": "转动之间，见工艺",
     "variant": "prayer-wheel"
-  },
-  {
-    "id": "sean-jewelry-002",
-    "name": "916 Gold Heritage Edition",
-    "category": "heritage-jewelry",
-    "imageAsset": "gold-jewelry-approved.png",
-    "videoAsset": "turning-cylinder-demo.mp4",
-    "audioAsset": "jewelry-ambient.wav",
-    "heroCopy": "916黄金 · 传承",
-    "macroCopy": "细节，留下时间",
-    "rotationCopy": "转动之间，见工艺",
-    "detailCopy": "传统纹理 · 当代呈现",
-    "endTitle": "金意传承",
-    "endSubtitle": "让工艺被看见",
-    "variant": "heritage"
-  },
-  {
-    "id": "sean-jewelry-003",
-    "name": "916 Gold Celebration Edition",
-    "category": "gift-jewelry",
-    "imageAsset": "gold-jewelry-approved.png",
-    "videoAsset": "turning-cylinder-demo.mp4",
-    "audioAsset": "jewelry-ambient.wav",
-    "heroCopy": "916黄金 · 礼成",
-    "macroCopy": "一件礼物，一份记忆",
-    "rotationCopy": "轻转，心意流动",
-    "detailCopy": "祝福藏在细节里",
-    "endTitle": "礼遇成金",
-    "endSubtitle": "把心意留得更久",
-    "variant": "celebration"
   }
 ]
