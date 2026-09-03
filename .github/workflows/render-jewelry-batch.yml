@@ -42,6 +42,8 @@ jobs:
           test "$(find batch-output/final -maxdepth 1 -type f -name '*.mp4' | wc -l)" -eq 3
           test "$(find batch-output/previews -maxdepth 1 -type f -name '*.jpg' | wc -l)" -eq 3
           test "$(find batch-output/qc-reports -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 3
+          test "$(find batch-output -maxdepth 1 -type f -name '*.remotion.log' | wc -l)" -eq 3
+          test "$(find batch-output/props -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 3
           test -s batch-output/batch-report.md
           test -s batch-output/Sean-Jewelry-Batch.zip
           ! grep -q '"renderStatus": "FAIL"' batch-output/qc-reports/*.json
@@ -56,6 +58,8 @@ jobs:
           path: |
             batch-output/final/
             batch-output/previews/
+            batch-output/props/
+            batch-output/*.remotion.log
             batch-output/batch-report.md
             batch-output/qc-reports/
             batch-output/Sean-Jewelry-Batch.zip
