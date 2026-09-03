@@ -1,4 +1,5 @@
 import {execFile} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {promisify} from 'node:util';
 import path from 'node:path';
@@ -10,6 +11,7 @@ const outputDir = path.join(repoDir, 'batch-output');
 const finalDir = path.join(outputDir, 'final');
 const qcDir = path.join(outputDir, 'qc-reports');
 const previewDir = path.join(outputDir, 'previews');
+const propsDir = path.join(outputDir, 'props');
 const reportPath = path.join(outputDir, 'batch-report.md');
 const zipPath = path.join(outputDir, 'Sean-Jewelry-Batch.zip');
 const maxConcurrent = Number(process.env.MAX_CONCURRENT_RENDERS ?? 2);
@@ -19,8 +21,12 @@ if (maxConcurrent !== 2) throw new Error(`MAX_CONCURRENT_RENDERS must be 2 (rece
 const products = JSON.parse(await readFile(path.join(projectDir, 'batch-products.json'), 'utf8'));
 if (products.length !== 3) throw new Error(`Expected exactly 3 products, received ${products.length}`);
 
+const sha256Buffer = (buffer) => createHash('sha256').update(buffer).digest('hex');
+const sha256File = async (file) => sha256Buffer(await readFile(file));
+const sha256Json = (value) => sha256Buffer(Buffer.from(JSON.stringify(value)));
+
 await rm(outputDir, {recursive: true, force: true});
-await Promise.all([finalDir, qcDir, previewDir].map((dir) => mkdir(dir, {recursive: true})));
+await Promise.all([finalDir, qcDir, previewDir, propsDir].map((dir) => mkdir(dir, {recursive: true})));
 await exec('node', ['scripts/prepare-approved-image.mjs'], {cwd: projectDir});
 
 const results = new Array(products.length);
@@ -30,18 +36,63 @@ const renderProduct = async (product, index) => {
   const video = path.join(finalDir, `${product.id}.mp4`);
   const preview = path.join(previewDir, `${product.id}.jpg`);
   const log = path.join(outputDir, `${product.id}.remotion.log`);
+  const propsPath = path.join(propsDir, `${product.id}.json`);
+  const primaryAssetPath = path.join(projectDir, 'public', product.imageAsset);
+  const inputAssetSha256 = await sha256File(primaryAssetPath);
+  const inputConfigSha256 = sha256Json(product);
+  const inputProps = {
+    productId: product.id,
+    productName: product.name,
+    category: product.category,
+    imageAsset: product.imageAsset,
+    videoAsset: product.videoAsset,
+    audioAsset: product.audioAsset,
+    heroCopy: product.heroCopy,
+    macroCopy: product.macroCopy,
+    rotationCopy: product.rotationCopy,
+    detailCopy: product.detailCopy,
+    endTitle: product.endTitle,
+    endSubtitle: product.endSubtitle,
+    variant: product.variant,
+  };
+  await writeFile(propsPath, `${JSON.stringify(inputProps, null, 2)}\n`);
+
+  console.log(
+    `Rendering ${product.id} with name=${JSON.stringify(product.name)} image=${product.imageAsset} ` +
+      `video=${product.videoAsset} variant=${product.variant} props=${propsPath} inputConfigSHA256=${inputConfigSha256}`,
+  );
+
   try {
     const rendered = await exec(
       path.join(projectDir, 'node_modules/.bin/remotion'),
-      ['render', 'src/index.ts', 'GoldJewelry15s', video, '--codec=h264', '--crf=18', '--pixel-format=yuv420p', '--concurrency=1'],
+      [
+        'render',
+        'src/index.ts',
+        'GoldJewelry15s',
+        video,
+        `--props=${propsPath}`,
+        '--codec=h264',
+        '--crf=18',
+        '--pixel-format=yuv420p',
+        '--concurrency=1',
+      ],
       {cwd: projectDir, maxBuffer: 20 * 1024 * 1024},
     );
     await writeFile(log, `${rendered.stdout}\n${rendered.stderr}`);
     await exec('ffmpeg', ['-y', '-ss', '7.5', '-i', video, '-frames:v', '1', '-q:v', '2', preview]);
-    const probe = await exec('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_name,width,height,pix_fmt:format=duration', '-of', 'json', video]);
+    const probe = await exec('ffprobe', [
+      '-v',
+      'error',
+      '-show_entries',
+      'stream=codec_name,width,height,pix_fmt:format=duration',
+      '-of',
+      'json',
+      video,
+    ]);
     const metadata = JSON.parse(probe.stdout);
     const stream = metadata.streams?.[0] ?? {};
     const duration = Number(metadata.format?.duration ?? 0);
+    const outputSha256 = await sha256File(video);
     const checks = {
       fileExists: true,
       codecH264: stream.codec_name === 'h264',
@@ -51,12 +102,36 @@ const renderProduct = async (product, index) => {
       remotionRenderer: true,
     };
     const score = Math.round((Object.values(checks).filter(Boolean).length / Object.keys(checks).length) * 100);
-    const qc = {product, renderer: 'Remotion', renderStatus: 'PASS', score, checks, duration};
+    const qc = {
+      product,
+      inputAsset: product.imageAsset,
+      inputAssetSha256,
+      inputConfigSha256,
+      outputMp4: path.relative(repoDir, video),
+      outputSha256,
+      preview: path.relative(repoDir, preview),
+      renderer: 'Remotion',
+      renderStatus: 'PASS',
+      score,
+      checks,
+      duration,
+    };
     await writeFile(path.join(qcDir, `${product.id}.json`), `${JSON.stringify(qc, null, 2)}\n`);
     results[index] = qc;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const qc = {product, renderer: 'Remotion', renderStatus: 'FAIL', score: 0, error: message};
+    const qc = {
+      product,
+      inputAsset: product.imageAsset,
+      inputAssetSha256,
+      inputConfigSha256,
+      outputMp4: path.relative(repoDir, video),
+      outputSha256: '',
+      renderer: 'Remotion',
+      renderStatus: 'FAIL',
+      score: 0,
+      error: message,
+    };
     await writeFile(path.join(qcDir, `${product.id}.json`), `${JSON.stringify(qc, null, 2)}\n`);
     results[index] = qc;
   }
@@ -70,17 +145,32 @@ const worker = async () => {
 };
 await Promise.all(Array.from({length: maxConcurrent}, worker));
 
-const passed = results.filter((result) => result.renderStatus === 'PASS').length;
+const passedResults = results.filter((result) => result.renderStatus === 'PASS');
+const passed = passedResults.length;
+const outputHashes = passedResults.map((result) => result.outputSha256).filter(Boolean);
+const uniqueOutputHashes = new Set(outputHashes).size === products.length;
+const uniqueInputConfigs = new Set(results.map((result) => result.inputConfigSha256)).size === products.length;
 const allQc = passed === products.length && results.every((result) => result.score >= 90);
-const report = `# Sean Jewelry Batch Test\n\n- Batch workflow: ${passed === 3 && allQc ? 'PASS' : 'FAIL'}\n- True Remotion render: ${passed === 3 ? 'PASS' : 'FAIL'}\n- Products rendered: ${passed}/3\n- All QC >=90: ${allQc ? 'YES' : 'NO'}\n- MAX_CONCURRENT_RENDERS: ${maxConcurrent}\n\n| Product | Remotion Render | QC score |\n|---|---:|---:|\n${results.map((r) => `| ${r.product.id} | ${r.renderStatus} | ${r.score} |`).join('\n')}\n`;
+const batchPass = passed === products.length && allQc && uniqueOutputHashes && uniqueInputConfigs;
+
+const tableRows = results
+  .map(
+    (r) =>
+      `| ${r.product.id} | ${r.product.name} | ${r.inputAsset} | ${r.inputAssetSha256} | ${r.inputConfigSha256} | ${r.outputMp4} | ${r.outputSha256 || '-'} | ${r.renderStatus} | ${r.score} |`,
+  )
+  .join('\n');
+
+const report = `# Sean Jewelry Batch Test\n\n- Batch workflow: ${batchPass ? 'PASS' : 'FAIL'}\n- True Remotion render: ${passed === products.length ? 'PASS' : 'FAIL'}\n- Products rendered: ${passed}/${products.length}\n- All QC >=90: ${allQc ? 'YES' : 'NO'}\n- Unique product input configs: ${uniqueInputConfigs ? 'PASS' : 'FAIL'}\n- Unique output SHA256 hashes: ${uniqueOutputHashes ? 'PASS' : 'FAIL'}\n- MAX_CONCURRENT_RENDERS: ${maxConcurrent}\n\n| Product ID | Product Name | Input asset | Input asset SHA256 | Input config SHA256 | Output MP4 | Output SHA256 | Remotion Render | QC score |\n|---|---|---|---|---|---|---|---:|---:|\n${tableRows}\n`;
 await writeFile(reportPath, report);
 
-if (passed !== 3 || !allQc) {
+if (!batchPass) {
   console.error(report);
+  if (!uniqueOutputHashes) console.error('Duplicate output SHA256 detected. Batch FAIL.');
+  if (!uniqueInputConfigs) console.error('Duplicate product input configuration detected. Batch FAIL.');
   console.error('Remotion Render = FAIL. No fallback renderer was attempted.');
   process.exitCode = 1;
 } else {
-  await exec('zip', ['-r', zipPath, 'final', 'batch-report.md', 'qc-reports'], {cwd: outputDir});
+  await exec('zip', ['-r', zipPath, 'final', 'previews', 'batch-report.md', 'qc-reports'], {cwd: outputDir});
   console.log(report);
   console.log(`ZIP artifact: ${zipPath}`);
 }
