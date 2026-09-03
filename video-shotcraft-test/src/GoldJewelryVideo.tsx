@@ -11,6 +11,38 @@ import {
   useCurrentFrame,
 } from 'remotion';
 
+export type GoldJewelryVideoProps = {
+  productId?: string;
+  productName?: string;
+  category?: string;
+  imageAsset?: string;
+  videoAsset?: string;
+  audioAsset?: string;
+  heroCopy?: string;
+  macroCopy?: string;
+  rotationCopy?: string;
+  detailCopy?: string;
+  endTitle?: string;
+  endSubtitle?: string;
+  variant?: 'prayer-wheel' | 'heritage' | 'celebration' | string;
+};
+
+export const defaultGoldJewelryProps: Required<GoldJewelryVideoProps> = {
+  productId: 'sean-jewelry-default',
+  productName: '916 Gold Prayer Wheel',
+  category: 'mechanical-jewelry',
+  imageAsset: 'gold-jewelry-approved.png',
+  videoAsset: 'turning-cylinder-demo.mp4',
+  audioAsset: 'jewelry-ambient.wav',
+  heroCopy: '916黄金 · 转经筒',
+  macroCopy: '纹理，不只是装饰',
+  rotationCopy: '一甩，即转',
+  detailCopy: '活动结构 · 真实可转',
+  endTitle: '匠心成金',
+  endSubtitle: '转动之间，见工艺',
+  variant: 'prayer-wheel',
+};
+
 const clamp = {
   extrapolateLeft: 'clamp' as const,
   extrapolateRight: 'clamp' as const,
@@ -26,6 +58,12 @@ const fade = (frame: number, duration: number, edge = 10) => {
   const fadeIn = interpolate(frame, [0, edge], [0, 1], clamp);
   const fadeOut = interpolate(frame, [duration - edge, duration], [1, 0], clamp);
   return Math.min(fadeIn, fadeOut);
+};
+
+const variantTuning = (variant: string) => {
+  if (variant === 'heritage') return {heroStart: 1.1, heroEnd: 1.02, macroX: -8, detailX: 122};
+  if (variant === 'celebration') return {heroStart: 1.18, heroEnd: 1.07, macroX: -56, detailX: 74};
+  return {heroStart: 1.14, heroEnd: 1.04, macroX: -30, detailX: 96};
 };
 
 const Spotlight: React.FC<{strength?: number}> = ({strength = 1}) => (
@@ -60,23 +98,24 @@ const BigCopy: React.FC<{children: React.ReactNode; opacity: number; bottom?: nu
       lineHeight: 1.22,
       opacity,
       textShadow: '0 4px 28px rgba(0,0,0,.98)',
-      fontFamily: '"Noto Serif SC", "Songti SC", "SimSun", serif',
+      fontFamily: '\"Noto Serif SC\", \"Songti SC\", \"SimSun\", serif',
     }}
   >
     {children}
   </div>
 );
 
-const HeroScene: React.FC<{duration: number}> = ({duration}) => {
+const HeroScene: React.FC<{duration: number; imageAsset: string; copy: string; variant: string}> = ({duration, imageAsset, copy, variant}) => {
   const frame = useCurrentFrame();
   const opacity = fade(frame, duration, 12);
-  const zoom = interpolate(frame, [0, duration], [1.14, 1.04], clamp);
+  const tuning = variantTuning(variant);
+  const zoom = interpolate(frame, [0, duration], [tuning.heroStart, tuning.heroEnd], clamp);
   const reveal = tween(frame, 0, 28);
 
   return (
     <AbsoluteFill style={{backgroundColor: '#000', opacity}}>
       <Img
-        src={staticFile('gold-jewelry-approved.png')}
+        src={staticFile(imageAsset)}
         style={{
           width: '100%',
           height: '100%',
@@ -86,22 +125,23 @@ const HeroScene: React.FC<{duration: number}> = ({duration}) => {
         }}
       />
       <Spotlight strength={0.96} />
-      <BigCopy opacity={tween(frame, 24, 48)}>916黄金 · 转经筒</BigCopy>
+      <BigCopy opacity={tween(frame, 24, 48)}>{copy}</BigCopy>
     </AbsoluteFill>
   );
 };
 
-const MacroScene: React.FC<{duration: number}> = ({duration}) => {
+const MacroScene: React.FC<{duration: number; imageAsset: string; copy: string; variant: string}> = ({duration, imageAsset, copy, variant}) => {
   const frame = useCurrentFrame();
   const opacity = fade(frame, duration, 10);
   const scale = interpolate(frame, [0, duration], [1.72, 1.92], clamp);
-  const x = interpolate(frame, [0, duration], [-30, -74], clamp);
+  const tuning = variantTuning(variant);
+  const x = interpolate(frame, [0, duration], [tuning.macroX, tuning.macroX - 44], clamp);
   const y = interpolate(frame, [0, duration], [124, 72], clamp);
 
   return (
     <AbsoluteFill style={{backgroundColor: '#000', opacity}}>
       <Img
-        src={staticFile('gold-jewelry-approved.png')}
+        src={staticFile(imageAsset)}
         style={{
           position: 'absolute',
           width: '100%',
@@ -113,15 +153,15 @@ const MacroScene: React.FC<{duration: number}> = ({duration}) => {
         }}
       />
       <Spotlight strength={0.88} />
-      <BigCopy opacity={tween(frame, 18, 42)} bottom={96}>纹理，不只是装饰</BigCopy>
+      <BigCopy opacity={tween(frame, 18, 42)} bottom={96}>{copy}</BigCopy>
     </AbsoluteFill>
   );
 };
 
-const RotationScene: React.FC<{duration: number}> = ({duration}) => {
+const RotationScene: React.FC<{duration: number; videoAsset: string; copy: string}> = ({duration, videoAsset, copy}) => {
   const frame = useCurrentFrame();
   const opacity = fade(frame, duration, 8);
-  const copy = tween(frame, 10, 30);
+  const copyOpacity = tween(frame, 10, 30);
   const zoom = interpolate(frame, [0, duration], [2.42, 2.62], clamp);
   const driftX = interpolate(frame, [0, duration], [18, -18], clamp);
   const driftY = interpolate(frame, [0, duration], [10, -12], clamp);
@@ -142,7 +182,7 @@ const RotationScene: React.FC<{duration: number}> = ({duration}) => {
         }}
       >
         <OffthreadVideo
-          src={staticFile('turning-cylinder-demo.mp4')}
+          src={staticFile(videoAsset)}
           trimBefore={210}
           trimAfter={315}
           playbackRate={0.88}
@@ -174,22 +214,23 @@ const RotationScene: React.FC<{duration: number}> = ({duration}) => {
         }}
       />
 
-      <BigCopy opacity={copy} bottom={112}>一甩，即转</BigCopy>
+      <BigCopy opacity={copyOpacity} bottom={112}>{copy}</BigCopy>
     </AbsoluteFill>
   );
 };
 
-const DetailScene: React.FC<{duration: number}> = ({duration}) => {
+const DetailScene: React.FC<{duration: number; imageAsset: string; copy: string; variant: string}> = ({duration, imageAsset, copy, variant}) => {
   const frame = useCurrentFrame();
   const opacity = fade(frame, duration, 8);
   const scale = interpolate(frame, [0, duration], [1.9, 1.7], clamp);
-  const x = interpolate(frame, [0, duration], [170, 96], clamp);
+  const tuning = variantTuning(variant);
+  const x = interpolate(frame, [0, duration], [170, tuning.detailX], clamp);
   const y = interpolate(frame, [0, duration], [60, 90], clamp);
 
   return (
     <AbsoluteFill style={{backgroundColor: '#000', opacity}}>
       <Img
-        src={staticFile('gold-jewelry-approved.png')}
+        src={staticFile(imageAsset)}
         style={{
           width: '100%',
           height: '100%',
@@ -200,21 +241,22 @@ const DetailScene: React.FC<{duration: number}> = ({duration}) => {
         }}
       />
       <Spotlight strength={0.92} />
-      <BigCopy opacity={tween(frame, 12, 34)} bottom={100}>活动结构 · 真实可转</BigCopy>
+      <BigCopy opacity={tween(frame, 12, 34)} bottom={100}>{copy}</BigCopy>
     </AbsoluteFill>
   );
 };
 
-const EndScene: React.FC<{duration: number}> = ({duration}) => {
+const EndScene: React.FC<{duration: number; imageAsset: string; title: string; subtitle: string; variant: string}> = ({duration, imageAsset, title, subtitle, variant}) => {
   const frame = useCurrentFrame();
   const imageIn = tween(frame, 0, 22);
   const copyIn = tween(frame, 18, 42);
-  const zoom = interpolate(frame, [0, duration], [1.12, 1.04], clamp);
+  const tuning = variantTuning(variant);
+  const zoom = interpolate(frame, [0, duration], [tuning.heroStart, tuning.heroEnd], clamp);
 
   return (
     <AbsoluteFill style={{backgroundColor: '#000'}}>
       <Img
-        src={staticFile('gold-jewelry-approved.png')}
+        src={staticFile(imageAsset)}
         style={{
           width: '100%',
           height: '100%',
@@ -235,37 +277,39 @@ const EndScene: React.FC<{duration: number}> = ({duration}) => {
           opacity: copyIn,
           transform: `translateY(${(1 - copyIn) * 12}px)`,
           textShadow: '0 3px 28px rgba(0,0,0,.98)',
-          fontFamily: '"Noto Serif SC", "Songti SC", "SimSun", serif',
+          fontFamily: '\"Noto Serif SC\", \"Songti SC\", \"SimSun\", serif',
         }}
       >
-        <div style={{fontSize: 78, fontWeight: 700, letterSpacing: 12, color: '#f4d27d'}}>匠心成金</div>
+        <div style={{fontSize: 78, fontWeight: 700, letterSpacing: 12, color: '#f4d27d'}}>{title}</div>
         <div style={{fontSize: 38, fontWeight: 500, letterSpacing: 7, marginTop: 20, color: '#efe0b8'}}>
-          转动之间，见工艺
+          {subtitle}
         </div>
       </div>
     </AbsoluteFill>
   );
 };
 
-export const GoldJewelryVideo: React.FC = () => {
+export const GoldJewelryVideo: React.FC<GoldJewelryVideoProps> = (inputProps) => {
+  const props = {...defaultGoldJewelryProps, ...inputProps};
+
   return (
     <AbsoluteFill style={{backgroundColor: '#000', overflow: 'hidden'}}>
-      <Html5Audio src={staticFile('jewelry-ambient.wav')} volume={0.62} />
+      <Html5Audio src={staticFile(props.audioAsset)} volume={0.62} />
 
       <Sequence from={0} durationInFrames={84}>
-        <HeroScene duration={84} />
+        <HeroScene duration={84} imageAsset={props.imageAsset} copy={props.heroCopy} variant={props.variant} />
       </Sequence>
       <Sequence from={74} durationInFrames={94}>
-        <MacroScene duration={94} />
+        <MacroScene duration={94} imageAsset={props.imageAsset} copy={props.macroCopy} variant={props.variant} />
       </Sequence>
       <Sequence from={158} durationInFrames={122}>
-        <RotationScene duration={122} />
+        <RotationScene duration={122} videoAsset={props.videoAsset} copy={props.rotationCopy} />
       </Sequence>
       <Sequence from={270} durationInFrames={84}>
-        <DetailScene duration={84} />
+        <DetailScene duration={84} imageAsset={props.imageAsset} copy={props.detailCopy} variant={props.variant} />
       </Sequence>
       <Sequence from={344} durationInFrames={106}>
-        <EndScene duration={106} />
+        <EndScene duration={106} imageAsset={props.imageAsset} title={props.endTitle} subtitle={props.endSubtitle} variant={props.variant} />
       </Sequence>
     </AbsoluteFill>
   );
