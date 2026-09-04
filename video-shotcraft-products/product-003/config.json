@@ -21,7 +21,11 @@
     "videoTrim": [300, 405]
   },
   "asset": {
-    "path": "assets/original.png",
-    "status": "MISSING"
+    "path": "assets/3b2530b6-bcc5-4f54-bf63-142a51cc3ecd.jpeg",
+    "status": "READY"
+  },
+  "video": {
+    "path": "assets/19105822-0ed2-4ab7-97bc-e0bbe6ccc28b.mov",
+    "status": "READY"
   }
 }
