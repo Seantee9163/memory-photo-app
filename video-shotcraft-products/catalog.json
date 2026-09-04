@@ -4,22 +4,28 @@
       "id": "product-001",
       "name": "916 Gold Prayer Wheel",
       "config": "product-001/config.json",
-      "image": "product-001/assets/original.png",
-      "imageStatus": "MISSING"
+      "image": "product-001/assets/c9f23bcd-28d2-44a7-8582-fe4b973afa20.jpeg",
+      "imageStatus": "READY",
+      "video": "product-001/assets/6042c5dd-e638-4a83-9177-d67ae120b1bd.mp4",
+      "videoStatus": "READY"
     },
     {
       "id": "product-002",
       "name": "916 Gold Heritage Edition",
       "config": "product-002/config.json",
-      "image": "product-002/assets/original.png",
-      "imageStatus": "MISSING"
+      "image": "product-002/assets/34448f41-7604-4c66-b375-6b8bd6eed309.jpeg",
+      "imageStatus": "READY",
+      "video": "product-002/assets/561afbff-2592-4458-a5e9-9d2ef57afd17.mp4",
+      "videoStatus": "READY"
     },
     {
       "id": "product-003",
       "name": "916 Gold Celebration Edition",
       "config": "product-003/config.json",
-      "image": "product-003/assets/original.png",
-      "imageStatus": "MISSING"
+      "image": "product-003/assets/3b2530b6-bcc5-4f54-bf63-142a51cc3ecd.jpeg",
+      "imageStatus": "READY",
+      "video": "product-003/assets/19105822-0ed2-4ab7-97bc-e0bbe6ccc28b.mov",
+      "videoStatus": "READY"
     }
   ]
 }
