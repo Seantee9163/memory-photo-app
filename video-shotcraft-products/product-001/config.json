@@ -1,0 +1,27 @@
+{
+  "id": "product-001",
+  "name": "916 Gold Prayer Wheel",
+  "coreSellingPoints": [
+    "Hand-finished prayer-wheel texture",
+    "A freely rotating centerpiece"
+  ],
+  "subtitles": [
+    "916黄金 · 转经筒",
+    "纹理，不只是装饰",
+    "一甩，即转",
+    "活动结构 · 真实可转",
+    "匠心成金",
+    "转动之间，见工艺"
+  ],
+  "shotConfig": {
+    "heroZoom": [1.14, 1.04],
+    "macroScale": [1.72, 1.92],
+    "rotationCrop": "70% 27%",
+    "accentColor": "#f4d78b",
+    "videoTrim": [210, 315]
+  },
+  "asset": {
+    "path": "assets/original.png",
+    "status": "MISSING"
+  }
+}

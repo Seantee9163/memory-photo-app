@@ -1,0 +1,27 @@
+{
+  "id": "product-003",
+  "name": "916 Gold Celebration Edition",
+  "coreSellingPoints": [
+    "Radiant high-polish highlights",
+    "A meaningful celebration gift"
+  ],
+  "subtitles": [
+    "璀璨时刻 · 庆典金饰",
+    "高光打磨，耀目生辉",
+    "轻转，绽放",
+    "灵动光泽 · 寓意圆满",
+    "为喜悦加冕",
+    "珍藏每一个重要时刻"
+  ],
+  "shotConfig": {
+    "heroZoom": [1.2, 1.06],
+    "macroScale": [1.9, 2.08],
+    "rotationCrop": "76% 24%",
+    "accentColor": "#ffd98a",
+    "videoTrim": [300, 405]
+  },
+  "asset": {
+    "path": "assets/original.png",
+    "status": "MISSING"
+  }
+}
