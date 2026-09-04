@@ -1,0 +1,27 @@
+{
+  "id": "product-002",
+  "name": "916 Gold Heritage Edition",
+  "coreSellingPoints": [
+    "Heritage-inspired engraved motif",
+    "Warm satin-gold finish"
+  ],
+  "subtitles": [
+    "古韵新生 · 传承金饰",
+    "层层錾刻，细节可见",
+    "光影流转",
+    "温润金色 · 历久弥新",
+    "承古焕新",
+    "把祝愿，戴在身边"
+  ],
+  "shotConfig": {
+    "heroZoom": [1.04, 1.13],
+    "macroScale": [1.58, 1.82],
+    "rotationCrop": "60% 32%",
+    "accentColor": "#efc06c",
+    "videoTrim": [255, 360]
+  },
+  "asset": {
+    "path": "assets/original.png",
+    "status": "MISSING"
+  }
+}
