@@ -1,14 +1,20 @@
-name: Render jewelry real product batch V6
+name: Video Shotcraft - Render + iPad Download
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: video-shotcraft-publish
+  cancel-in-progress: false
 
 jobs:
-  render-jewelry-real-batch-v6:
+  render-jewelry-real-batch:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -42,25 +48,27 @@ jobs:
         working-directory: video-shotcraft-test
         run: npm run typecheck
 
-      - name: Render three real catalog products
+      - name: Render real catalog products
         working-directory: video-shotcraft-test
         env:
           MAX_CONCURRENT_RENDERS: '2'
         run: node scripts/render-catalog-batch.mjs
 
-      - name: Verify distinct real-product outputs
+      - name: Verify rendered outputs
         run: |
-          test -s batch-output/final/product-001.mp4
-          test -s batch-output/final/product-002.mp4
-          test -s batch-output/final/product-003.mp4
+          EXPECTED_COUNT=$(node -e "const p=require('./video-shotcraft-test/batch-products.json'); process.stdout.write(String(p.length))")
+          ACTUAL_COUNT=$(find batch-output/final -maxdepth 1 -type f -name '*.mp4' | wc -l)
+          echo "Expected products: $EXPECTED_COUNT"
+          echo "Rendered MP4 files: $ACTUAL_COUNT"
+          test "$EXPECTED_COUNT" -ge 1
+          test "$ACTUAL_COUNT" -eq "$EXPECTED_COUNT"
           test -s batch-output/batch-report.md
           grep -q 'Batch workflow: PASS' batch-output/batch-report.md
-          echo 'Three distinct real-product renders verified.'
 
-      - name: Upload real jewelry batch
+      - name: Upload complete render artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Sean-Jewelry-Real-Batch-V6
+          name: Sean-Video-Shotcraft-Latest
           path: |
             batch-output/final/*.mp4
             batch-output/previews/*.jpg
@@ -68,4 +76,31 @@ jobs:
             batch-output/qc-reports/*.json
             batch-output/props/*.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14
+
+      - name: Publish MP4 files for direct iPad download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_TAG="video-shotcraft-latest"
+          RELEASE_TITLE="Video Shotcraft - Latest Render"
+
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target "${GITHUB_SHA}" \
+              --title "$RELEASE_TITLE" \
+              --notes "Latest automatically rendered Video Shotcraft jewelry videos. Tap an MP4 asset on iPad to view or download it directly."
+          fi
+
+          for file in batch-output/final/*.mp4; do
+            test -s "$file"
+            gh release upload "$RELEASE_TAG" "$file" --clobber
+          done
+
+      - name: Print direct-download links
+        run: |
+          echo "Release page: https://github.com/${GITHUB_REPOSITORY}/releases/tag/video-shotcraft-latest"
+          for file in batch-output/final/*.mp4; do
+            name=$(basename "$file")
+            echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/video-shotcraft-latest/${name}"
+          done
