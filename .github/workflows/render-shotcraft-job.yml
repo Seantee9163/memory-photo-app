@@ -1,0 +1,95 @@
+name: Video Shotcraft - iPad Job Render
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'video-shotcraft-products/inbox/**/job.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: video-shotcraft-ipad-jobs
+  cancel-in-progress: false
+
+jobs:
+  render-shotcraft-job:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install renderer dependencies
+        working-directory: video-shotcraft-test
+        run: npm ci
+
+      - name: Install ffmpeg and CJK fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg fonts-noto-cjk
+
+      - name: Type-check Remotion project
+        working-directory: video-shotcraft-test
+        run: npm run typecheck
+
+      - name: Render latest iPad job
+        working-directory: video-shotcraft-test
+        run: node scripts/render-shotcraft-job.mjs
+
+      - name: Verify output
+        run: |
+          test -s batch-output/final/latest.mp4
+          test -s batch-output/shotcraft-job-report.json
+          grep -q '"status": "PASS"' batch-output/shotcraft-job-report.json
+
+      - name: Read job id
+        id: job
+        shell: bash
+        run: |
+          JOB_ID=$(node -e "const r=require('./batch-output/shotcraft-job-report.json'); process.stdout.write(r.jobId)")
+          echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Upload job artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Video-Shotcraft-${{ steps.job.outputs.job_id }}
+          path: |
+            batch-output/final/${{ steps.job.outputs.job_id }}.mp4
+            batch-output/shotcraft-job-report.json
+            batch-output/props/${{ steps.job.outputs.job_id }}.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish direct-download MP4
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_TAG="video-shotcraft-latest"
+          RELEASE_TITLE="Video Shotcraft - Latest Render"
+          JOB_ID="${{ steps.job.outputs.job_id }}"
+
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --target "${GITHUB_SHA}" \
+              --title "$RELEASE_TITLE" \
+              --notes "Latest automatically rendered Video Shotcraft jewelry videos."
+          fi
+
+          gh release upload "$RELEASE_TAG" "batch-output/final/${JOB_ID}.mp4" --clobber
+          gh release upload "$RELEASE_TAG" "batch-output/final/latest.mp4" --clobber
+
+      - name: Print result
+        run: |
+          echo "Job: ${{ steps.job.outputs.job_id }}"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/video-shotcraft-latest/${{ steps.job.outputs.job_id }}.mp4"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/video-shotcraft-latest/latest.mp4"
