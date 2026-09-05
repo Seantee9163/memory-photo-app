@@ -1,4 +1,4 @@
-name: Render jewelry ad V5
+name: Render jewelry real product batch V6
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  render-jewelry-ad-v5:
+  render-jewelry-real-batch-v6:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -35,21 +35,37 @@ jobs:
       - name: Install ffmpeg and CJK fonts
         run: |
           sudo apt-get update
-          sudo apt-get install --yes ffmpeg fonts-noto-cjk
+          sudo apt-get install --yes ffmpeg fonts-noto-cjk zip
           ffmpeg -version
-          fc-list | grep -i "Noto Serif CJK" | head -5 || true
 
-      - name: Render black-focus jewelry ad V5
+      - name: Type-check renderer
         working-directory: video-shotcraft-test
-        run: bash render.sh
+        run: npm run typecheck
 
-      - name: Verify video output
-        run: test -s video-shotcraft-test/output/gold-jewelry-ad-v5-15s.mp4
+      - name: Render three real catalog products
+        working-directory: video-shotcraft-test
+        env:
+          MAX_CONCURRENT_RENDERS: '2'
+        run: node scripts/render-catalog-batch.mjs
 
-      - name: Upload jewelry ad V5
+      - name: Verify distinct real-product outputs
+        run: |
+          test -s batch-output/final/product-001.mp4
+          test -s batch-output/final/product-002.mp4
+          test -s batch-output/final/product-003.mp4
+          test -s batch-output/batch-report.md
+          grep -q 'Batch workflow: PASS' batch-output/batch-report.md
+          echo 'Three distinct real-product renders verified.'
+
+      - name: Upload real jewelry batch
         uses: actions/upload-artifact@v4
         with:
-          name: Sean-Gold-Jewelry-Ad-V5
-          path: video-shotcraft-test/output/gold-jewelry-ad-v5-15s.mp4
+          name: Sean-Jewelry-Real-Batch-V6
+          path: |
+            batch-output/final/*.mp4
+            batch-output/previews/*.jpg
+            batch-output/batch-report.md
+            batch-output/qc-reports/*.json
+            batch-output/props/*.json
           if-no-files-found: error
           retention-days: 7
