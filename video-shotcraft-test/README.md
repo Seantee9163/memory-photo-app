@@ -1,21 +1,59 @@
-# Approved gold jewelry film
+# Video Shotcraft jewelry renderer
 
-This Remotion project creates a 15-second, 1080 × 1920, 30 FPS jewelry film from the single approved product photograph. The shot design only pans, scales, fades, shades, and adds a restrained light sweep over that photograph; it does not redraw or regenerate the jewelry.
+This Remotion project renders vertical jewelry videos and supports both the original approved 15-second test film and the real-product batch workflow.
 
-To keep the attached PNG out of the pull-request binary diff, its **exact bytes** are committed as review-safe Base64 text at `assets/gold-jewelry-approved.png.base64`. The `prerender` script restores those bytes to `public/gold-jewelry-approved.png` before every render. This is lossless packaging—not image generation or modification.
+## Automatic GitHub render
 
-## Render on Ubuntu
+The main workflow is:
 
-Requirements: Node.js 20 or newer. Remotion downloads its compatible headless browser when necessary. From the repository root, run:
+```text
+Video Shotcraft - Render + iPad Download
+```
+
+It can be started manually from GitHub Actions. It also starts automatically when these product inputs change on `main`:
+
+```text
+video-shotcraft-test/batch-products.json
+video-shotcraft-test/assets/**
+video-shotcraft-products/**
+```
+
+The workflow installs Node.js/Remotion/ffmpeg, type-checks the renderer, renders the real product catalog, verifies the outputs, and stores the complete result as the `Sean-Video-Shotcraft-Latest` GitHub Actions artifact.
+
+## iPad direct MP4 download
+
+Every successful render also publishes the latest MP4 files to the stable GitHub Release tag:
+
+```text
+video-shotcraft-latest
+```
+
+Release page:
+
+```text
+https://github.com/Seantee9163/memory-photo-app/releases/tag/video-shotcraft-latest
+```
+
+Stable direct-download links:
+
+```text
+https://github.com/Seantee9163/memory-photo-app/releases/download/video-shotcraft-latest/product-001.mp4
+https://github.com/Seantee9163/memory-photo-app/releases/download/video-shotcraft-latest/product-002.mp4
+https://github.com/Seantee9163/memory-photo-app/releases/download/video-shotcraft-latest/product-003.mp4
+```
+
+On iPad, open the release page and tap an MP4 asset. The Actions artifact remains available as the complete batch archive; the Release assets are the direct MP4 delivery path.
+
+## Local render
+
+Requirements: Node.js 20 or newer. From the repository root, run:
 
 ```bash
 bash video-shotcraft-test/render.sh
 ```
 
-The script installs the locked npm dependencies when needed, type-checks the source, restores the approved PNG, and writes the H.264 deliverable to:
+The original approved test render is written to:
 
 ```text
 video-shotcraft-test/output/gold-jewelry-approved-15s.mp4
 ```
-
-Generated output, browser caches, and dependencies are intentionally ignored by Git. Both manual GitHub Actions workflows render and upload the deliverable as the `Sean-Gold-Jewelry-Approved-01` artifact.
