@@ -1,0 +1,37 @@
+name: Hari Malaysia - prepare public media
+on:
+  push:
+    branches: ['shotcraft/hari-malaysia-delivery']
+    paths:
+      - '.github/workflows/hari-malaysia-media.yml'
+      - 'video-production/hari-malaysia/prepare_media.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: hari-malaysia-public-preparation
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install public-media tooling
+        run: python -m pip install edge-tts pillow requests pyshp
+      - name: Prepare narration and public reference assets
+        env:
+          METASO_MINIMAX_API_KEY: ${{ secrets.METASO_MINIMAX_API_KEY }}
+          METASO_API_KEY: ${{ secrets.METASO_API_KEY }}
+        run: python video-production/hari-malaysia/prepare_media.py
+      - name: Save media and attribution metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hari-Malaysia-Public-Media
+          path: hari-media-output/
+          if-no-files-found: error
+          retention-days: 3
