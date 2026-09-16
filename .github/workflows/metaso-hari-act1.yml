@@ -1,0 +1,83 @@
+name: Shotcraft - Hari Malaysia scenes 01-03
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_new_batch:
+        description: 'Create THREE 15s 768P clips, estimated 459 EXISTING Metaso credits. No recharge. Do not rerun paid work.'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/metaso-hari-act1.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: hari-malaysia-act1-creation
+  cancel-in-progress: false
+
+jobs:
+  generate-and-check:
+    if: (github.event_name == 'workflow_dispatch' && inputs.confirm_new_batch) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[hari-act1-authorized]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Load existing generic narration, not private user media
+        uses: actions/download-artifact@v4
+        with:
+          name: Hari-Malaysia-Metaso-First-Sample-35048780461
+          run-id: 35048780461
+          github-token: ${{ github.token }}
+          path: previous
+      - name: Install media utilities
+        run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --yes ffmpeg
+          fi
+          python -m pip install --disable-pip-version-check Pillow numpy
+          python -m py_compile shotcraft-studio/scripts/metaso_hari_act1.py
+      - name: Generate the three planned scenes, at most one POST per scene
+        env:
+          METASO_API_KEY: ${{ secrets.METASO_API_KEY }}
+          CREATE_ALLOWED: 'true'
+          PYTHONUNBUFFERED: '1'
+        run: python shotcraft-studio/scripts/metaso_hari_act1.py
+      - name: Transcribe actual returned audio without seeding the expected text
+        if: success()
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          HF_HUB_DISABLE_PROGRESS_BARS: '1'
+        run: |
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from faster_whisper import WhisperModel
+          model=WhisperModel('small',device='cpu',compute_type='int8',cpu_threads=2)
+          for video in sorted(Path('hari-act1').glob('scene-*-raw.mp4')):
+              segments,info=model.transcribe(str(video),beam_size=5,vad_filter=True,word_timestamps=True,condition_on_previous_text=False)
+              rows=[{'start':s.start,'end':s.end,'text':s.text.strip(),'avg_logprob':s.avg_logprob,'no_speech_prob':s.no_speech_prob,
+                     'words':[{'start':w.start,'end':w.end,'word':w.word,'probability':w.probability} for w in (s.words or [])]} for s in segments]
+              report={'file':video.name,'language':info.language,'language_probability':info.language_probability,
+                      'duration':info.duration,'segments':rows,'transcript':' '.join(s['text'] for s in rows),
+                      'limitation':'Automatic transcription, not native-speaker listening or identity verification.'}
+              video.with_suffix('.asr.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+              print(video.name,report['language'],report['transcript'])
+          PY
+      - name: Preserve media and sanitized report even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hari-Malaysia-Act1-${{ github.run_id }}
+          path: hari-act1/
+          retention-days: 7
+          if-no-files-found: warn
