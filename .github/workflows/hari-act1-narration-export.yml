@@ -1,0 +1,58 @@
+name: Shotcraft - Existing Act1 narration export
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/hari-act1-narration-export.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  retrieve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Retrieve existing generic narration without authorization headers
+        shell: python
+        run: |
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          import json
+          out=Path('narration-export'); out.mkdir(exist_ok=True)
+          # Generic synthetic project narration, not a personal recording.
+          # No API key, JWT or other authorization token is embedded or sent.
+          url='https://dnznrvs05pmza.cloudfront.net/text_to_speech/caffdd8d-11ba-4440-8a18-1e052e44aef4/Hari_Malaysia___scenes_01_03___corrected_Malay_male_narration__not_Sean_clone_.mp3'
+          try:
+              with urlopen(Request(url,headers={'User-Agent':'Shotcraft/1.2'}),timeout=60) as r:
+                  body=r.read(12000000)
+              if len(body)<10000: raise RuntimeError('Empty or invalid audio')
+              (out/'act1-narration.mp3').write_bytes(body)
+              (out/'retrieval.json').write_text(json.dumps({'status':'downloaded','bytes':len(body),'new_generations':0,'credentials_used':False}),encoding='utf-8')
+          except Exception as e:
+              (out/'retrieval.json').write_text(json.dumps({'status':'unavailable','error':type(e).__name__,'http_status':getattr(e,'code',None),'new_generations':0,'credentials_used':False}),encoding='utf-8')
+              raise RuntimeError('Existing narration unavailable without credentials; no alternate paid generation attempted.') from None
+      - name: Inspect and transcribe actual retrieved audio
+        run: |
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from faster_whisper import WhisperModel
+          model=WhisperModel('small',device='cpu',compute_type='int8',cpu_threads=2)
+          segments,info=model.transcribe('narration-export/act1-narration.mp3',beam_size=5,vad_filter=True,word_timestamps=True,condition_on_previous_text=False)
+          rows=[{'start':s.start,'end':s.end,'text':s.text,'words':[{'start':w.start,'end':w.end,'word':w.word} for w in (s.words or [])]} for s in segments]
+          result={'language':info.language,'probability':info.language_probability,'duration':info.duration,'segments':rows,'text':' '.join(s['text'] for s in rows)}
+          Path('narration-export/asr.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(result,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Hari-Act1-Existing-Narration-${{ github.run_id }}
+          path: narration-export/
+          retention-days: 7
