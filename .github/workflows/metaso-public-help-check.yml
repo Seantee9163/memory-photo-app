@@ -38,8 +38,9 @@ jobs:
 
           root = load(PAGE)
           print('Public HTML bytes:', len(root))
-          urls = list(dict.fromkeys(urljoin(PAGE, html.unescape(s)) for s in re.findall(r'<script[^>]+src=[\"\x27]([^\"\x27]+)', root)))[:45]
+          urls = list(dict.fromkeys(urljoin(PAGE, html.unescape(s)) for s in re.findall(r'<script[^>]+src=[\"\x27]([^\"\x27]+)', root)))[:160]
           print('Public script assets:', len(urls))
+          print('Route scripts:', [u for u in urls if '/app/' in u or '/pages/' in u])
           texts = [(PAGE, root)]
           with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
               texts += list(zip(urls, pool.map(load, urls)))
@@ -52,7 +53,7 @@ jobs:
                       i = body.find(needle, pos)
                       if i < 0:
                           break
-                      hits.append({'needle': needle, 'context': scrub(body[max(0, i-300):i+450])})
+                      hits.append({'needle': needle, 'context': scrub(body[max(0, i-400):i+650])})
                       pos = i + len(needle)
               if hits:
                   print(json.dumps({'public_asset': url, 'matches': hits}, ensure_ascii=False))
