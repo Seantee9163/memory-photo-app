@@ -15,41 +15,80 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Check for an existing Metaso credential without revealing it
+      - name: Diagnose saved credential and perform read-only authentication probe
         env:
           METASO_API_KEY: ${{ secrets.METASO_API_KEY }}
-          METASO_H3_API_KEY: ${{ secrets.METASO_H3_API_KEY }}
-          METASO_TOKEN: ${{ secrets.METASO_TOKEN }}
-          METASO_API_TOKEN: ${{ secrets.METASO_API_TOKEN }}
         shell: python
         run: |
+          import json
           import os
-          import sys
           from pathlib import Path
+          import re
+          import sys
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, HTTPRedirectHandler, build_opener
 
-          names = ('METASO_API_KEY', 'METASO_H3_API_KEY', 'METASO_TOKEN', 'METASO_API_TOKEN')
-          configured = [name for name in names if os.environ.get(name, '').strip()]
-          lines = [
-              '# Metaso connection preflight',
-              '',
-              'This diagnostic makes no API requests, creates no video task, and spends no Metaso credits.',
-              'No credentials, cookies, personal media or voice samples are printed or uploaded.',
-              'It checks only the four repository/organization secret names listed below; environment-scoped secrets and differently named keys are not inspected.',
-              '',
-          ]
-          for name in names:
-              lines.append(f'- {name}: ' + ('configured' if name in configured else 'not available to this job'))
-          if configured:
-              lines.extend(['', 'Status: CREDENTIAL_CONFIGURED_BUT_NOT_AUTHENTICATED.',
-                            'Presence does not establish validity, video permission, credit balance or watermark policy.'])
-              print('CREDENTIAL_CONFIGURED_BUT_NOT_AUTHENTICATED')
-              print('Configured secret names: ' + ', '.join(configured))
-          else:
-              lines.extend(['', 'Status: MISSING_METASO_CREDENTIAL.',
-                            'Save the existing Metaso VIDEO API key under repository Actions secret METASO_API_KEY.',
-                            'Do not paste the key in issues, code, workflow inputs or chat.',
-                            'No top-up, subscription purchase or other payment action is implemented.'])
-              print('MISSING_METASO_CREDENTIAL')
-              print('All four checked Metaso secret names are unavailable. No generation request was made.')
-          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('\n'.join(lines) + '\n', encoding='utf-8')
-          sys.exit(0 if configured else 1)
+          original = os.environ.get('METASO_API_KEY', '')
+          token = original.strip().lstrip('\ufeff')
+          if len(token) > 1 and token[0] in ('\"', "'") and token[-1] == token[0]:
+              token = token[1:-1].strip()
+          if token.lower().startswith('bearer '):
+              token = token[7:].strip()
+          report = {'secret_available': bool(original.strip()), 'normalization_needed': token != original.strip(), 'generation_requests': 0, 'recharge_requests': 0, 'api_probe_sent': False}
+
+          def safe_message(value):
+              text = str(value)
+              for key in (original, token):
+                  if key:
+                      text = text.replace(key, '[REDACTED]')
+              text = re.sub(r'https?://\S+', '[URL OMITTED]', text)
+              text = re.sub(r'(?i)Bearer\s+\S+|\b(?:mk|sk)-[A-Za-z0-9_-]+', '[REDACTED]', text)
+              return text[:400]
+
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs):
+                  return None
+
+          try:
+              if not token:
+                  report['result'] = 'EMPTY_SECRET'
+              elif token.lower().startswith(('https://', 'http://')):
+                  report['result'] = 'URL_IN_SECRET_NOT_A_TOKEN'
+              elif token in ('METASO_API_KEY', 'mk-YOUR_TOKEN_HERE', 'YOUR_API_KEY', 'YOUR_TOKEN'):
+                  report['result'] = 'PLACEHOLDER_IN_SECRET_NOT_A_TOKEN'
+              elif not re.fullmatch(r'[!-~]{8,4096}', token):
+                  report['result'] = 'TOKEN_HAS_INTERNAL_WHITESPACE_OR_NON_HEADER_CHARACTERS'
+              else:
+                  report['documented_video_prefix_matches'] = token.startswith('mk-')
+                  report['api_probe_sent'] = True
+                  # Documented query endpoint; a deliberately non-existent sentinel ID.
+                  # No creation, media upload, billing or credit purchase is performed.
+                  url = 'https://metaso.cn/api/minimax/v2/query/video_generation/shotcraft-connectivity-check-not-a-real-task'
+                  request = Request(url, method='GET', headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'User-Agent': 'Shotcraft/1.0'})
+                  try:
+                      with build_opener(NoRedirect()).open(request, timeout=45) as response:
+                          http_status = response.status
+                          raw = response.read(100000)
+                  except HTTPError as error:
+                      http_status = error.code
+                      raw = error.read(100000)
+                  report['http_status'] = http_status
+                  try:
+                      data = json.loads(raw)
+                  except (ValueError, UnicodeDecodeError):
+                      data = {}
+                  if isinstance(data, dict):
+                      base = data.get('base_resp') or {}
+                      if isinstance(base, dict):
+                          report['api_status_code'] = base.get('status_code')
+                          report['api_message'] = safe_message(base.get('status_msg') or data.get('message') or data.get('error') or '')
+                  report['result'] = 'READ_ONLY_PROBE_COMPLETE'
+                  # A missing/invalid sentinel task is not proof of usable video permission.
+          except (URLError, TimeoutError, OSError):
+              report['result'] = 'READ_ONLY_PROBE_TRANSPORT_ERROR'
+          except Exception as error:
+              report['result'] = 'DIAGNOSTIC_ERROR'
+              report['error'] = safe_message(error)
+          text = json.dumps(report, ensure_ascii=False, indent=2)
+          print('METASO_DIAGNOSTIC_REPORT\n' + text)
+          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('# Metaso read-only diagnostic\n\n```json\n' + text + '\n```\n', encoding='utf-8')
