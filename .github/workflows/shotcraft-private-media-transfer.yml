@@ -1,0 +1,108 @@
+name: Shotcraft - Private existing narration transfer
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/shotcraft-private-media-transfer.yml']
+permissions:
+  contents: read
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare one-time public key; private key never leaves runner
+        run: |
+          python -m pip install --disable-pip-version-check cryptography
+          python - <<'PY'
+          import json, os, secrets
+          from pathlib import Path
+          from cryptography.hazmat.primitives.asymmetric import rsa
+          from cryptography.hazmat.primitives import serialization
+          key=rsa.generate_private_key(public_exponent=65537,key_size=2048)
+          temp=Path(os.environ['RUNNER_TEMP'])
+          (temp/'transfer-private.pem').write_bytes(key.private_bytes(serialization.Encoding.PEM,serialization.PrivateFormat.PKCS8,serialization.NoEncryption()))
+          os.chmod(temp/'transfer-private.pem',0o600)
+          public=key.public_key().public_bytes(serialization.Encoding.PEM,serialization.PublicFormat.SubjectPublicKeyInfo).decode()
+          nonce=secrets.token_hex(16)
+          (temp/'transfer-nonce').write_text(nonce)
+          Path('handshake').mkdir()
+          Path('handshake/public-key.json').write_text(json.dumps({'run_id':os.environ['GITHUB_RUN_ID'],'public_key':public,'nonce':nonce}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Shotcraft-Transfer-Public-Key-${{ github.run_id }}
+          path: handshake/public-key.json
+          retention-days: 1
+      - name: Wait for encrypted location and retrieve existing audio
+        shell: python
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          import base64, json, os, time
+          from pathlib import Path
+          from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
+          from urllib.error import HTTPError
+          from urllib.parse import urlparse
+          from cryptography.hazmat.primitives import serialization, hashes
+          from cryptography.hazmat.primitives.asymmetric import padding
+          from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+          rid=os.environ['GITHUB_RUN_ID']; repo=os.environ['GITHUB_REPOSITORY']
+          path='shotcraft-studio/transfers/'+rid+'.json'
+          temp=Path(os.environ['RUNNER_TEMP']); nonce=(temp/'transfer-nonce').read_text()
+          key=serialization.load_pem_private_key((temp/'transfer-private.pem').read_bytes(),password=None)
+          location=None
+          for _ in range(90):
+              try:
+                  req=Request('https://api.github.com/repos/'+repo+'/contents/'+path+'?ref=main',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'Shotcraft'})
+                  with urlopen(req,timeout=25) as r: meta=json.load(r)
+                  package=json.loads(base64.b64decode(meta['content']))
+                  if package.get('run_id')!=rid: raise RuntimeError('Run mismatch')
+                  secret=key.decrypt(base64.b64decode(package['wrapped_key']),padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
+                  location=AESGCM(secret).decrypt(base64.b64decode(package['iv']),base64.b64decode(package['ciphertext']),nonce.encode()).decode()
+                  break
+              except HTTPError as e:
+                  if e.code!=404: raise RuntimeError('Mailbox request failed') from None
+              time.sleep(5)
+          if not location: raise RuntimeError('Transfer timeout; no generation or paid request performed')
+          p=urlparse(location)
+          if p.scheme!='https' or p.hostname!='dnznrvs05pmza.cloudfront.net' or p.username or p.password or p.port not in (None,443) or not p.path.startswith('/text_to_speech/'):
+              raise RuntimeError('Unexpected source host or media path')
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self,*args,**kwargs): return None
+          out=Path('narration-transfer'); out.mkdir(exist_ok=True)
+          try:
+              with build_opener(NoRedirect()).open(Request(location,headers={'User-Agent':'Shotcraft/1.2'}),timeout=90) as r:
+                  body=r.read(20000001)
+              if not 10000<len(body)<=20000000: raise RuntimeError('Invalid audio size')
+              (out/'act1-narration.mp3').write_bytes(body)
+              (out/'transfer-report.json').write_text(json.dumps({'status':'retrieved_existing_audio','bytes':len(body),'new_generation_requests':0,'private_key_exported':False,'signed_url_in_source_or_logs':False}))
+          except Exception as e:
+              raise RuntimeError('Media retrieval failed: '+type(e).__name__) from None
+          finally:
+              (temp/'transfer-private.pem').unlink(missing_ok=True)
+              location=None; secret=None; key=None
+      - name: Transcribe actual replacement audio
+        run: |
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from faster_whisper import WhisperModel
+          model=WhisperModel('small',device='cpu',compute_type='int8',cpu_threads=2)
+          segments,info=model.transcribe('narration-transfer/act1-narration.mp3',beam_size=5,vad_filter=True,word_timestamps=True,condition_on_previous_text=False)
+          rows=[{'start':s.start,'end':s.end,'text':s.text.strip(),'words':[{'start':w.start,'end':w.end,'word':w.word} for w in (s.words or [])]} for s in segments]
+          result={'language':info.language,'probability':info.language_probability,'duration':info.duration,'segments':rows,'text':' '.join(s['text'] for s in rows),'method':'ASR, no seeded transcript; not native listening review'}
+          Path('narration-transfer/asr.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(result,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Shotcraft-Existing-Narration-${{ github.run_id }}
+          path: narration-transfer/
+          if-no-files-found: warn
+          retention-days: 7
