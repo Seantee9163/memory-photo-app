@@ -1,0 +1,55 @@
+name: Shotcraft - Metaso connection check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/metaso-connection-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check-metaso-credential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check for an existing Metaso credential without revealing it
+        env:
+          METASO_API_KEY: ${{ secrets.METASO_API_KEY }}
+          METASO_H3_API_KEY: ${{ secrets.METASO_H3_API_KEY }}
+          METASO_TOKEN: ${{ secrets.METASO_TOKEN }}
+          METASO_API_TOKEN: ${{ secrets.METASO_API_TOKEN }}
+        shell: python
+        run: |
+          import os
+          import sys
+          from pathlib import Path
+
+          names = ('METASO_API_KEY', 'METASO_H3_API_KEY', 'METASO_TOKEN', 'METASO_API_TOKEN')
+          configured = [name for name in names if os.environ.get(name, '').strip()]
+          lines = [
+              '# Metaso connection preflight',
+              '',
+              'This diagnostic makes no API requests, creates no video task, and spends no Metaso credits.',
+              'No credentials, cookies, personal media or voice samples are printed or uploaded.',
+              'It checks only the four repository/organization secret names listed below; environment-scoped secrets and differently named keys are not inspected.',
+              '',
+          ]
+          for name in names:
+              lines.append(f'- {name}: ' + ('configured' if name in configured else 'not available to this job'))
+          if configured:
+              lines.extend(['', 'Status: CREDENTIAL_CONFIGURED_BUT_NOT_AUTHENTICATED.',
+                            'Presence does not establish validity, video permission, credit balance or watermark policy.'])
+              print('CREDENTIAL_CONFIGURED_BUT_NOT_AUTHENTICATED')
+              print('Configured secret names: ' + ', '.join(configured))
+          else:
+              lines.extend(['', 'Status: MISSING_METASO_CREDENTIAL.',
+                            'Save the existing Metaso VIDEO API key under repository Actions secret METASO_API_KEY.',
+                            'Do not paste the key in issues, code, workflow inputs or chat.',
+                            'No top-up, subscription purchase or other payment action is implemented.'])
+              print('MISSING_METASO_CREDENTIAL')
+              print('All four checked Metaso secret names are unavailable. No generation request was made.')
+          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          sys.exit(0 if configured else 1)
