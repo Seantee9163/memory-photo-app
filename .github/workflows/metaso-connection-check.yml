@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Diagnose saved credential and perform read-only authentication probe
+      - name: Read-only diagnostic - never creates a video or proves generation permission
         env:
           METASO_API_KEY: ${{ secrets.METASO_API_KEY }}
         shell: python
@@ -30,11 +30,19 @@ jobs:
 
           original = os.environ.get('METASO_API_KEY', '')
           token = original.strip().lstrip('\ufeff')
-          if len(token) > 1 and token[0] in ('\"', "'") and token[-1] == token[0]:
+          if len(token) > 1 and token[0] in ('"', "'") and token[-1] == token[0]:
               token = token[1:-1].strip()
           if token.lower().startswith('bearer '):
               token = token[7:].strip()
-          report = {'secret_available': bool(original.strip()), 'normalization_needed': token != original.strip(), 'generation_requests': 0, 'recharge_requests': 0, 'api_probe_sent': False}
+          report = {
+              'secret_available': bool(original.strip()),
+              'normalization_needed': token != original.strip(),
+              'generation_requests': 0, 'recharge_requests': 0,
+              'api_probe_sent': False, 'video_permission_verified': False,
+              'sentinel_task_used': True,
+          }
+          exit_code = 1
+          meaning = '检查未完成；没有生成请求。'
 
           def safe_message(value):
               text = str(value)
@@ -50,45 +58,52 @@ jobs:
                   return None
 
           try:
-              if not token:
-                  report['result'] = 'EMPTY_SECRET'
-              elif token.lower().startswith(('https://', 'http://')):
-                  report['result'] = 'URL_IN_SECRET_NOT_A_TOKEN'
-              elif token in ('METASO_API_KEY', 'mk-YOUR_TOKEN_HERE', 'YOUR_API_KEY', 'YOUR_TOKEN'):
-                  report['result'] = 'PLACEHOLDER_IN_SECRET_NOT_A_TOKEN'
-              elif not re.fullmatch(r'[!-~]{8,4096}', token):
-                  report['result'] = 'TOKEN_HAS_INTERNAL_WHITESPACE_OR_NON_HEADER_CHARACTERS'
+              if not token or not token.startswith('mk-') or not re.fullmatch(r'[!-~]{8,4096}', token):
+                  report['result'] = 'EMPTY_OR_MALFORMED_SECRET'
+                  meaning = '密钥缺失或格式不符合文档；未向接口发送请求。'
+              elif token in ('mk-YOUR_TOKEN_HERE', 'mk-YOUR_API_KEY'):
+                  report['result'] = 'PLACEHOLDER_NOT_A_CREDENTIAL'
+                  meaning = '保存的是示例占位符，不是有效密钥。'
               else:
-                  report['documented_video_prefix_matches'] = token.startswith('mk-')
+                  report['documented_video_prefix_matches'] = True
                   report['api_probe_sent'] = True
-                  # Documented query endpoint; a deliberately non-existent sentinel ID.
-                  # No creation, media upload, billing or credit purchase is performed.
                   url = 'https://metaso.cn/api/minimax/v2/query/video_generation/shotcraft-connectivity-check-not-a-real-task'
-                  request = Request(url, method='GET', headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'User-Agent': 'Shotcraft/1.0'})
+                  request = Request(url, method='GET', headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'User-Agent': 'Shotcraft/1.1'})
                   try:
                       with build_opener(NoRedirect()).open(request, timeout=45) as response:
-                          http_status = response.status
-                          raw = response.read(100000)
+                          code, raw = response.status, response.read(100000)
                   except HTTPError as error:
-                      http_status = error.code
-                      raw = error.read(100000)
-                  report['http_status'] = http_status
+                      code, raw = error.code, error.read(100000)
+                  report['http_status'] = code
                   try:
                       data = json.loads(raw)
                   except (ValueError, UnicodeDecodeError):
                       data = {}
+                  error = data.get('error') if isinstance(data, dict) else None
+                  base = data.get('base_resp') or {} if isinstance(data, dict) else {}
+                  message = error.get('message') if isinstance(error, dict) else error
                   if isinstance(data, dict):
-                      base = data.get('base_resp') or {}
-                      if isinstance(base, dict):
-                          report['api_status_code'] = base.get('status_code')
-                          report['api_message'] = safe_message(base.get('status_msg') or data.get('message') or data.get('error') or '')
-                  report['result'] = 'READ_ONLY_PROBE_COMPLETE'
-                  # A missing/invalid sentinel task is not proof of usable video permission.
+                      message = message or data.get('message') or (base.get('status_msg') if isinstance(base, dict) else None)
+                  report['api_message'] = safe_message(message or '')
+                  if code in (401, 403):
+                      report['result'] = 'AUTHENTICATION_OR_PERMISSION_REJECTED'
+                      meaning = '接口拒绝了鉴权或权限；不要提交生成。'
+                  elif code == 400 and 'invalid task_id' in str(message).lower():
+                      report['result'] = 'EXPECTED_INVALID_SENTINEL_TASK'
+                      meaning = '接口已返回“无效任务编号”。本检查故意使用不存在的任务；绿色勾仅表示检查完成，不代表视频生成权限或余额已验证。'
+                      exit_code = 0
+                      print('::warning::Read-only probe completed with expected invalid task_id. Video permission and balance are NOT verified. No generation was submitted.')
+                  else:
+                      report['result'] = 'PROBE_INCONCLUSIVE'
+                      meaning = '收到其他接口响应；未确认生成权限。不要仅凭流程颜色判断成功。'
           except (URLError, TimeoutError, OSError):
-              report['result'] = 'READ_ONLY_PROBE_TRANSPORT_ERROR'
+              report['result'] = 'TRANSPORT_ERROR'
+              meaning = '网络请求未完成；未确认鉴权结果。'
           except Exception as error:
               report['result'] = 'DIAGNOSTIC_ERROR'
               report['error'] = safe_message(error)
+          report['interpretation'] = meaning
           text = json.dumps(report, ensure_ascii=False, indent=2)
           print('METASO_DIAGNOSTIC_REPORT\n' + text)
-          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('# Metaso read-only diagnostic\n\n```json\n' + text + '\n```\n', encoding='utf-8')
+          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('# Metaso 只读连接检查\n\n**' + meaning + '**\n\n生成请求：0。充值请求：0。\n\n```json\n' + text + '\n```\n', encoding='utf-8')
+          sys.exit(exit_code)
