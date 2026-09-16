@@ -1,0 +1,101 @@
+name: Hari Malaysia - editorial assets
+on:
+  push:
+    branches: ['shotcraft/hari-malaysia-delivery-20260916']
+    paths: ['.github/workflows/hari-malaysia-assets.yml']
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install asset preparation dependencies
+        run: pip install edge-tts requests pillow
+      - name: Prepare public editorial materials
+        shell: bash
+        run: |
+          mkdir -p delivery/audio delivery/assets
+          cat > /tmp/prepare.py <<'PY'
+          import asyncio, json, pathlib, time, requests, concurrent.futures
+          from urllib.parse import quote
+          import edge_tts
+          root=pathlib.Path('delivery')
+          texts=[
+          'Pada tahun seribu sembilan ratus enam puluh satu, tercetus satu gagasan untuk membentuk sebuah negara baharu yang dikenali sebagai Malaysia.',
+          'Pada tahun seribu sembilan ratus enam puluh dua, Suruhanjaya Cobbold menjalankan tinjauan untuk mengetahui pandangan rakyat di Sabah dan Sarawak.',
+          'Pada sembilan Julai seribu sembilan ratus enam puluh tiga, Perjanjian Malaysia seribu sembilan ratus enam puluh tiga telah ditandatangani.',
+          'Penubuhan Malaysia pada asalnya dirancang pada tiga puluh satu Ogos seribu sembilan ratus enam puluh tiga. Namun, tarikh tersebut ditangguhkan.',
+          'Pada enam belas September seribu sembilan ratus enam puluh tiga, Malaysia secara rasmi diisytiharkan.',
+          'Pada tahun seribu sembilan ratus enam puluh lima, Singapura berpisah daripada Malaysia.',
+          'Hari ini, Malaysia terdiri daripada Semenanjung Malaysia, Sabah dan Sarawak.',
+          'Enam belas September bukan sekadar sebuah tarikh. Ia adalah sebahagian daripada sejarah pembentukan Malaysia. Sejarah kita. Malaysia kita.'
+          ]
+          (root/'narration.json').write_text(json.dumps(texts,ensure_ascii=False,indent=2))
+          failures=[]; sources=[]
+          async def speech():
+            sem=asyncio.Semaphore(2)
+            async def one(i,text):
+              async with sem:
+                for attempt in range(3):
+                  try:
+                    comm=edge_tts.Communicate(text, 'ms-MY-OsmanNeural', rate='-8%', pitch='-2Hz')
+                    await comm.save(str(root/'audio'/f'{i:02d}.mp3'),str(root/'audio'/f'{i:02d}.vtt'))
+                    print('AUDIO_OK',i,flush=True);return
+                  except Exception as e:
+                    print('AUDIO_RETRY',i,type(e).__name__,str(e)[:150],flush=True);await asyncio.sleep(3*(attempt+1))
+                failures.append({'audio':i,'error':'speech unavailable'})
+            await asyncio.gather(*(one(i+1,t) for i,t in enumerate(texts)))
+          def get(url):
+            r=requests.get(url,timeout=90,headers={'User-Agent':'ShotcraftEditorial/1.0 (public documentary assets; credit metadata preserved)'})
+            r.raise_for_status();return r
+          def file(url,path):
+            data=get(url).content;(root/'assets'/path).write_bytes(data);return len(data)
+          def commons(title,name):
+            try:
+              query='https://commons.wikimedia.org/w/api.php?action=query&format=json&prop=imageinfo&iiprop=url%7Cextmetadata&iiurlwidth=2000&titles='+quote('File:'+title)
+              obj=get(query).json();page=next(iter(obj['query']['pages'].values()));info=page['imageinfo'][0]
+              url=info.get('thumburl') or info['url']
+              try: size=file(url,name)
+              except Exception: size=file(info['url'],name)
+              sources.append({'file':name,'title':title,'page':'https://commons.wikimedia.org/wiki/File:'+quote(title.replace(' ','_')),'url':info['url'],'metadata':info.get('extmetadata',{})})
+              print('IMAGE_OK',name,size,flush=True)
+            except Exception as e:
+              failures.append({'image':title,'error':str(e)[:300]});print('IMAGE_FAIL',title,str(e)[:120],flush=True)
+          def maps():
+            try:
+              url='https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson'
+              obj=get(url).json();features=[f for f in obj['features'] if f['properties'].get('adm0_a3') in ['MYS','BRN','SGP','IDN','THA','PHL']]
+              (root/'assets'/'region_states.geojson').write_text(json.dumps({'type':'FeatureCollection','features':features}))
+              sources.append({'file':'region_states.geojson','source':url,'license':'Natural Earth public domain','note':'Modern administrative geography; time-specific affiliations added by editor.'})
+              print('MAP_OK',len(features),flush=True)
+            except Exception as e: failures.append({'map':str(e)});print('MAP_FAIL',str(e)[:120],flush=True)
+          def treaty():
+            try:
+              url='https://treaties.un.org/doc/Publication/UNTS/Volume%20750/volume-750-I-10760-English.pdf'
+              size=file(url,'MA63_UNTS.pdf');sources.append({'file':'MA63_UNTS.pdf','source':url,'description':'UN Treaty Series official agreement text'});print('TREATY_OK',size,flush=True)
+            except Exception as e:failures.append({'treaty':str(e)});print('TREATY_FAIL',str(e)[:120],flush=True)
+          def assets():
+            pairs=[('Stadium Merdeka Complete.jpg','stadium.jpg'),('Kuala Lumpur skyline (25572093014).jpg','kl.jpg'),('Kinabalu Sunset.jpg','kinabalu.jpg'),('Summit of Mount Kinabalu.jpg','kinabalu_summit.jpg'),('Bako beach stone formations (27136204283).jpg','bako.jpg')]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+              tasks=[pool.submit(commons,t,n) for t,n in pairs]+[pool.submit(maps),pool.submit(treaty)]
+              for f in tasks:f.result()
+          async def main():
+            await asyncio.gather(speech(),asyncio.to_thread(assets))
+            (root/'sources.json').write_text(json.dumps(sources,ensure_ascii=False,indent=2))
+            (root/'failures.json').write_text(json.dumps(failures,ensure_ascii=False,indent=2))
+            print('SUMMARY',len(list((root/'audio').glob('*.mp3'))),'audio files;',len(sources),'sources;',len(failures),'failures',flush=True)
+          asyncio.run(main())
+          PY
+          python /tmp/prepare.py
+      - name: Package editorial assets only (not published video)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hari-Malaysia-Editorial-Assets
+          path: delivery/
+          retention-days: 1
+          if-no-files-found: error
