@@ -2,6 +2,15 @@ name: Shotcraft - Metaso Hari Malaysia first sample
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_new_generation:
+        description: 'Create ONE new 15s 768P sample (estimated 153 existing credits; no top-up)'
+        type: boolean
+        default: false
+      resume_task_id:
+        description: 'Existing task ID: poll/download only, no new generation charge'
+        type: string
+        default: ''
   push:
     branches: [main]
     paths:
@@ -16,12 +25,15 @@ concurrency:
 
 jobs:
   generate-one-sample:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[metaso-one-sample]')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - name: Generate one 15 second closing-scene sample using existing credits only
+      - name: Submit at most one sample or resume an existing task
         env:
           METASO_API_KEY: ${{ secrets.METASO_API_KEY }}
+          RESUME_TASK_ID: ${{ inputs.resume_task_id || '' }}
+          CREATE_ALLOWED: ${{ (github.event_name == 'workflow_dispatch' && inputs.confirm_new_generation) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[metaso-one-sample]')) }}
           PYTHONUNBUFFERED: '1'
         shell: python
         run: |
@@ -35,103 +47,108 @@ jobs:
           import sys
           import time
           from urllib.error import HTTPError, URLError
-          from urllib.parse import quote, urlparse
+          from urllib.parse import quote, urljoin, urlparse
           from urllib.request import Request, HTTPRedirectHandler, build_opener
 
           OUT = Path('metaso-hari-output')
           OUT.mkdir(exist_ok=True)
-          token = os.environ.get('METASO_API_KEY', '').strip()
+          original = os.environ.get('METASO_API_KEY', '')
+          token = original.strip().lstrip('\ufeff')
+          if len(token) > 1 and token[0] in ('"', "'") and token[-1] == token[0]:
+              token = token[1:-1].strip()
+          if token.lower().startswith('bearer '):
+              token = token[7:].strip()
+          resume = os.environ.get('RESUME_TASK_ID', '').strip()
+          create_allowed = os.environ.get('CREATE_ALLOWED', '').lower() == 'true'
           report = {
               'project': 'Hari Malaysia', 'scene': '08 closing scene - first quality sample',
               'status': 'preflight', 'new_generation_posts': 0,
-              'model': 'MiniMax-H3', 'resolution_requested': '768P', 'duration_requested_seconds': 15,
-              'aspect_ratio_requested': '9:16', 'watermark_requested': False,
-              'estimated_credits_from_published_rate': 153.0,
+              'model': 'MiniMax-H3', 'resolution_requested': '768P',
+              'duration_requested_seconds': 15, 'aspect_ratio_requested': '9:16',
+              'watermark_requested': False, 'context_ir_enabled': False,
+              'estimated_credits_from_published_rate': 0.0 if resume else 153.0,
               'actual_charge_credits': None, 'remaining_credits': None,
               'billing_policy': 'Existing Metaso credits only. No recharge, purchase, subscription or overage action.',
-              'voice': 'Generic male Bahasa Melayu narration, not an identity clone.',
+              'voice': 'Generic adult male Bahasa Melayu narration; not a Sean voice clone.',
               'private_user_image_or_voice_uploaded': False,
-              'visual_status': 'AI-generated illustrative scenery. Requires visual and narration QC.',
-              'task_id': None,
+              'visual_status': 'AI-generated illustrative scenery, not archival footage. Requires visual and narration QC.',
+              'task_id': None, 'resuming_existing_task': bool(resume),
           }
 
-          def save():
-              (OUT / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-              summary = os.environ.get('GITHUB_STEP_SUMMARY')
-              if summary:
-                  Path(summary).write_text('# Metaso Hari Malaysia sample\n\n```json\n' + json.dumps(report, ensure_ascii=False, indent=2) + '\n```\n', encoding='utf-8')
-
           def redact(value):
-              s = str(value)
-              if token:
-                  s = s.replace(token, '[REDACTED]')
-              s = re.sub(r'(?i)Bearer\s+\S+', 'Bearer [REDACTED]', s)
-              s = re.sub(r'\b(?:mk|sk)-[A-Za-z0-9_-]+', '[REDACTED]', s)
-              s = re.sub(r'https?://\S+', '[URL OMITTED]', s)
-              return s[:600]
+              text = str(value)
+              for secret in (original, token):
+                  if secret:
+                      text = text.replace(secret, '[REDACTED]')
+              text = re.sub(r'(?i)Bearer\s+\S+|\b(?:mk|sk)-[A-Za-z0-9_-]+', '[REDACTED]', text)
+              text = re.sub(r'https?://\S+', '[URL OMITTED]', text)
+              return text[:600]
+
+          def save():
+              text = json.dumps(report, ensure_ascii=False, indent=2) + '\n'
+              (OUT / 'report.json').write_text(text, encoding='utf-8')
+              if os.environ.get('GITHUB_STEP_SUMMARY'):
+                  Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('# Metaso Hari Malaysia sample\n\n```json\n' + text + '```\n', encoding='utf-8')
 
           class NoRedirect(HTTPRedirectHandler):
               def redirect_request(self, *args, **kwargs):
                   return None
 
+          class ApiError(RuntimeError):
+              def __init__(self, code, message):
+                  self.code = code
+                  super().__init__(message)
+
           opener = build_opener(NoRedirect())
           base = 'https://metaso.cn/api/minimax'
 
           def call_api(method, path, payload=None):
-              headers = {'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'User-Agent': 'Shotcraft/1.0'}
+              headers = {'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'User-Agent': 'Shotcraft/1.1'}
               data = None
               if payload is not None:
                   headers['Content-Type'] = 'application/json'
                   data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
-              request = Request(base + path, headers=headers, data=data, method=method)
               try:
-                  with opener.open(request, timeout=180) as response:
-                      http = response.status
-                      raw = response.read(2_000_000)
+                  with opener.open(Request(base + path, headers=headers, data=data, method=method), timeout=180) as response:
+                      code, raw = response.status, response.read(2_000_000)
               except HTTPError as error:
-                  http = error.code
-                  raw = error.read(2_000_000)
+                  code, raw = error.code, error.read(2_000_000)
               except (URLError, TimeoutError, OSError):
-                  raise RuntimeError('API transport failed. The create call is NOT automatically retried to avoid duplicate charges.')
+                  raise ApiError(0, 'API transport failed; the create request will NOT be retried.')
               try:
                   parsed = json.loads(raw)
               except (ValueError, UnicodeDecodeError):
-                  raise RuntimeError('API did not return JSON; HTTP ' + str(http))
+                  raise ApiError(code, 'Non-JSON response; HTTP ' + str(code))
               if not isinstance(parsed, dict):
-                  raise RuntimeError('Unexpected API response shape; HTTP ' + str(http))
-              status = parsed.get('base_resp') or {}
-              if http >= 300 or (isinstance(status, dict) and status.get('status_code') not in (None, 0, '0')):
-                  message = status.get('status_msg') if isinstance(status, dict) else None
-                  message = message or parsed.get('message') or parsed.get('error') or 'Request rejected'
-                  report['api_http_status'] = http
-                  if isinstance(status, dict):
-                      report['api_status_code'] = status.get('status_code')
+                  raise ApiError(code, 'Unexpected response shape; HTTP ' + str(code))
+              base_resp = parsed.get('base_resp') or {}
+              error = parsed.get('error')
+              bad_base = isinstance(base_resp, dict) and base_resp.get('status_code') not in (None, 0, '0')
+              if code >= 300 or bad_base or parsed.get('type') == 'error' or error:
+                  message = error.get('message') if isinstance(error, dict) else error
+                  message = message or parsed.get('message') or (base_resp.get('status_msg') if isinstance(base_resp, dict) else None) or 'Request rejected'
+                  report['api_http_status'] = code
                   report['api_message'] = redact(message)
-                  raise RuntimeError('Metaso rejected the request: HTTP ' + str(http) + '; ' + redact(message))
+                  raise ApiError(code, 'Metaso rejected request: HTTP ' + str(code) + '; ' + redact(message))
               return parsed
-
-          def validate_download_url(url):
-              p = urlparse(url)
-              if p.scheme != 'https' or not p.hostname or p.username or p.password or p.port not in (None, 443):
-                  raise RuntimeError('Unsupported media download URL.')
-              for entry in socket.getaddrinfo(p.hostname, 443, proto=socket.IPPROTO_TCP):
-                  if not ipaddress.ip_address(entry[4][0]).is_global:
-                      raise RuntimeError('Refusing a non-public media download target.')
 
           def download(url, target):
               for _ in range(6):
-                  validate_download_url(url)
+                  p = urlparse(url)
+                  if p.scheme != 'https' or not p.hostname or p.username or p.password or p.port not in (None, 443):
+                      raise RuntimeError('Unsupported media download URL.')
+                  for address in socket.getaddrinfo(p.hostname, 443, proto=socket.IPPROTO_TCP):
+                      if not ipaddress.ip_address(address[4][0]).is_global:
+                          raise RuntimeError('Refusing non-public download target.')
                   try:
-                      # Never forward the Metaso bearer token to a media/CDN host.
-                      response = opener.open(Request(url, headers={'User-Agent': 'Shotcraft/1.0'}), timeout=120)
+                      # Do not send any bearer token to media/CDN hosts.
+                      response = opener.open(Request(url, headers={'User-Agent': 'Shotcraft/1.1'}), timeout=120)
                   except HTTPError as error:
                       if error.code in (301, 302, 303, 307, 308):
-                          from urllib.parse import urljoin
                           url = urljoin(url, error.headers.get('Location', ''))
                           continue
                       raise RuntimeError('Media download rejected; HTTP ' + str(error.code))
-                  total = 0
-                  digest = hashlib.sha256()
+                  total, digest = 0, hashlib.sha256()
                   with response, target.open('wb') as output:
                       while True:
                           chunk = response.read(1024 * 1024)
@@ -139,81 +156,97 @@ jobs:
                               break
                           total += len(chunk)
                           if total > 500 * 1024 * 1024:
-                              raise RuntimeError('Media exceeds the 500 MB download cap.')
+                              raise RuntimeError('Media exceeds 500 MB cap.')
                           output.write(chunk)
                           digest.update(chunk)
                   if total < 1024:
-                      raise RuntimeError('Media output is unexpectedly small.')
+                      raise RuntimeError('Media output unexpectedly small.')
                   return total, digest.hexdigest()
               raise RuntimeError('Too many media redirects.')
 
           try:
-              if int(os.environ.get('GITHUB_RUN_ATTEMPT', '1')) != 1:
-                  raise RuntimeError('Automatic re-run blocked: use the recorded task ID to resume polling, not another paid create request.')
-              if not token:
-                  raise RuntimeError('METASO_API_KEY is not available to this job.')
-              if not token.startswith('mk-') or any(c.isspace() for c in token):
-                  raise RuntimeError('Credential format does not match the documented Metaso H3 video API key. No API request was sent.')
-              print('Credential is configured. Submitting ONE authorized 15-second 768P video. Estimated published-rate cost: 153 credits; account balance not yet known.')
-              prompt = '''Create a 15-second vertical 9:16 cinematic documentary CLOSING SCENE for Hari Malaysia. Present-day Malaysia, solemn, warm, realistic live-action visual language. This is illustrative documentary scenery, not archival footage.
-              Visual timeline: 0-5 seconds a slow elegant aerial drift over an empty tropical rainforest canopy at dawn in Malaysian Borneo, subtle mist and warm natural light. 5-10 seconds a gentle match dissolve into an unoccupied Malaysian tropical coastline with forest meeting a turquoise sea, natural geography and calm waves. 10-15 seconds an empty traditional Malaysian rural landscape with timber village roofs partly framed by palms and a rising sun. No crowds, no inhabitants, no people or body parts, no faces, no actors, no hands, no silhouettes, no human reflections, no boats with occupants, no animals. No futuristic architecture. Do not draw maps or flags or documents in this test; verified map, flag and end-title graphics will be composited later. No written text, no captions, no watermark, no platform logo, no logo outro. Smooth restrained camera moves; no frantic transitions; true-to-life color, never cartoon or anime.
-              Sound: one consistent adult male off-screen documentary narrator, a warm natural medium-low male voice, calm and clear STANDARD BAHASA MELAYU, never an advertising voice. Do NOT show the speaker. This is a generic synthetic voice, not a named person's imitation. No music, no competing speech, no sound effects over the voice. Narration starts at 0.5 seconds; moderate pace with a meaningful pause after the first sentence; finish all words by 14 seconds. Speak exactly: "Enam belas September bukan sekadar sebuah tarikh. Ia adalah sebahagian daripada sejarah pembentukan Malaysia. Sejarah kita. Malaysia kita."
-              Keep the four spoken sentences accurate. Do not add any other words. Leave a quiet audio tail before the end.'''
-              payload = {'model': 'MiniMax-H3', 'content': [{'type': 'text', 'text': prompt}], 'resolution': '768P', 'duration': 15, 'ratio': '9:16', 'aigc_watermark': False}
-              report['status'] = 'submitting'
-              report['new_generation_posts'] = 1
-              save()
-              result = call_api('POST', '/v2/video_generation', payload)
-              task_id = result.get('task_id')
-              if task_id is None:
-                  report['api_message'] = redact(result.get('message') or result.get('error') or result.get('base_resp') or 'No task_id returned')
-                  raise RuntimeError('Metaso did not return a task ID. No automatic resubmission.')
-              task_id = str(task_id)
-              if not re.fullmatch(r'[A-Za-z0-9_-]{1,160}', task_id):
-                  raise RuntimeError('Unexpected task identifier format.')
-              report['task_id'] = task_id
-              report['status'] = 'accepted'
-              save()
-              print('METASO_TASK_ACCEPTED ' + task_id)
-              deadline = time.monotonic() + 1500
-              previous = None
-              media_url = None
+              if not token or not token.startswith('mk-') or not re.fullmatch(r'[!-~]{8,4096}', token):
+                  raise RuntimeError('Saved credential is absent or malformed. No API request was sent.')
+              if resume:
+                  if not re.fullmatch(r'[A-Za-z0-9_-]{1,160}', resume):
+                      raise RuntimeError('Invalid resume task ID.')
+                  task_id = resume
+                  report.update(task_id=task_id, status='resuming_existing_task')
+                  save()
+              else:
+                  if not create_allowed:
+                      raise RuntimeError('New generation not confirmed. Use resume_task_id for an existing task, or explicitly confirm one new generation.')
+                  if int(os.environ.get('GITHUB_RUN_ATTEMPT', '1')) != 1:
+                      raise RuntimeError('Paid retry blocked. Resume the recorded task ID instead of creating a duplicate.')
+                  prompt = '''Create a 15-second vertical 9:16 cinematic documentary CLOSING SCENE for Hari Malaysia. Present-day Malaysia, solemn, warm, realistic live-action visual language. This is illustrative documentary scenery, not archival footage.
+                  Visual timeline: 0-5 seconds slow aerial drift over uninhabited tropical rainforest canopy at dawn in Malaysian Borneo, subtle mist and warm natural light. 5-10 seconds gentle match dissolve to an empty Malaysian tropical coastline, forest meeting turquoise sea, natural geography and calm waves. 10-15 seconds an empty traditional Malaysian rural landscape with timber village roofs framed by palms and a rising sun. No crowds, people, faces, actors, hands, body parts, silhouettes, human reflections, occupied boats or animals. No futuristic architecture. Do not draw maps, flags or historical documents in this test; verified map, flag and end-title graphics will be composited later. No text, captions, watermark, platform logo or branded outro. Smooth restrained camera moves; true-to-life color, not cartoon or anime.
+                  Audio: one consistent adult male OFF-SCREEN documentary narrator, natural medium-low voice, calm clear STANDARD BAHASA MELAYU, not an advertising voice. Never show the narrator. A generic synthetic voice, not a named person's imitation. No music or competing speech. Begin at 0.5 seconds, pause after the first sentence, finish every word by 14 seconds, then a quiet tail. Speak exactly: "Enam belas September bukan sekadar sebuah tarikh. Ia adalah sebahagian daripada sejarah pembentukan Malaysia. Sejarah kita. Malaysia kita." Do not add words.'''
+                  payload = {
+                      'model': 'MiniMax-H3', 'content': [{'type': 'text', 'text': prompt}],
+                      'resolution': '768P', 'duration': 15, 'ratio': '9:16',
+                      'aigc_watermark': False, 'context_ir_enabled': False,
+                  }
+                  report.update(status='submitting', new_generation_posts=1)
+                  save()
+                  print('Submitting ONE 15s 768P job, estimated 153 existing credits. Context IR disabled. No top-up. No create retry.')
+                  result = call_api('POST', '/v2/video_generation', payload)
+                  task_id = str(result.get('task_id') or '')
+                  if not re.fullmatch(r'[A-Za-z0-9_-]{1,160}', task_id):
+                      raise RuntimeError('No valid task ID returned. Do not automatically resubmit; verify the provider request history first.')
+                  report.update(task_id=task_id, status='accepted')
+                  save()
+                  print('METASO_TASK_ACCEPTED ' + task_id)
+              deadline, previous, media_url, failures = time.monotonic() + 1500, None, None, 0
               while time.monotonic() < deadline:
-                  result = call_api('GET', '/v2/query/video_generation/' + quote(task_id, safe=''))
+                  try:
+                      result = call_api('GET', '/v2/query/video_generation/' + quote(task_id, safe=''))
+                      failures = 0
+                  except ApiError as error:
+                      if error.code not in (0, 429, 500, 502, 503, 504) or failures >= 4:
+                          raise
+                      failures += 1
+                      report['status'] = 'polling_retry_existing_task'
+                      save()
+                      time.sleep(10 * failures)
+                      continue
                   task = result.get('task') or {}
+                  if not isinstance(task, dict):
+                      raise RuntimeError('Invalid task response.')
                   phase = str(task.get('status', '')).lower()
-                  content = task.get('content') or {}
-                  if isinstance(content, dict):
-                      media_url = content.get('url')
                   if phase != previous:
                       print('TASK_STATUS ' + redact(phase or 'queued'))
                       previous = phase
                       report['status'] = phase or 'queued'
                       save()
                   if phase in ('failed', 'fail', 'cancelled', 'canceled', 'expired', 'error'):
-                      report['api_message'] = redact(task.get('error') or phase)
-                      raise RuntimeError('Metaso task failed: ' + report['api_message'])
-                  if media_url:
+                      raise RuntimeError('Generation task failed: ' + redact(task.get('error') or phase))
+                  content = task.get('content') or {}
+                  if phase in ('succeeded', 'success', 'completed') and isinstance(content, dict) and content.get('url'):
+                      media_url = content['url']
+                      report['provider_usage'] = task.get('usage')
+                      report['provider_resolution'] = task.get('resolution')
+                      report['provider_duration_seconds'] = task.get('duration')
+                      report['provider_ratio'] = task.get('ratio')
                       break
                   time.sleep(15)
               if not media_url:
                   report['status'] = 'polling_timeout_resume_existing_task'
-                  raise RuntimeError('Polling timeout; task ID is preserved. Do not create a duplicate task.')
+                  raise RuntimeError('Polling timeout. Resume recorded task; do not create another one.')
               target = OUT / 'Hari_Malaysia_Scene08_Metaso_RAW.mp4'
-              size, sha = download(str(media_url), target)
-              report.update(status='downloaded_awaiting_quality_check', output_bytes=size, output_sha256=sha, output_file=target.name)
-              print('VIDEO_DOWNLOADED bytes=' + str(size) + ' sha256=' + sha)
-              print('No top-up or purchase request was made. No private user photo/video/voice was uploaded. Narration requires listening QC.')
+              size, digest = download(str(media_url), target)
+              report.update(status='downloaded_awaiting_quality_check', output_bytes=size, output_sha256=digest, output_file=target.name)
+              report.pop('api_message', None)
+              report.pop('api_http_status', None)
               save()
+              print('VIDEO_DOWNLOADED bytes=' + str(size) + ' sha256=' + digest)
           except Exception as error:
-              if report['status'] != 'polling_timeout_resume_existing_task':
-                  report['status'] = 'stopped'
+              report['status'] = 'resume_existing_task_required' if report['task_id'] else 'stopped'
               report['stop_reason'] = redact(error)
               save()
               print('STOPPED: ' + redact(error))
               sys.exit(1)
 
-      - name: Save generated sample and sanitized status report
+      - name: Save sample and sanitized report
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
