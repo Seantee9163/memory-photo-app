@@ -1,0 +1,76 @@
+name: Shotcraft - Metaso sample narration QC
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/metaso-hari-sample-qc.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  transcribe-existing-sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Download already generated sample (no new generation)
+        uses: actions/download-artifact@v4
+        with:
+          name: Hari-Malaysia-Metaso-First-Sample-35048780461
+          run-id: 35048780461
+          github-token: ${{ github.token }}
+          path: sample
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install CPU speech recognition
+        run: python -m pip install --disable-pip-version-check faster-whisper==1.2.1
+      - name: Transcribe without seeding expected words
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
+          HF_HUB_DISABLE_PROGRESS_BARS: '1'
+        shell: python
+        run: |
+          import json
+          import os
+          from pathlib import Path
+          from faster_whisper import WhisperModel
+          video = Path('sample/Hari_Malaysia_Scene08_Metaso_RAW.mp4')
+          if not video.is_file():
+              raise RuntimeError('Expected existing sample is missing.')
+          out = Path('narration-qc')
+          out.mkdir(exist_ok=True)
+          model = WhisperModel('small', device='cpu', compute_type='int8', cpu_threads=2)
+          segments, info = model.transcribe(str(video), beam_size=5, vad_filter=True, word_timestamps=True, condition_on_previous_text=False)
+          rows = []
+          for s in segments:
+              rows.append({'start': s.start, 'end': s.end, 'text': s.text.strip(), 'avg_logprob': s.avg_logprob, 'no_speech_prob': s.no_speech_prob})
+          result = {
+              'source_run_id': 35048780461,
+              'new_generation_posts': 0,
+              'service_credentials_used': False,
+              'method': 'faster-whisper small multilingual CPU int8; automatic language detection; no expected transcript supplied',
+              'detected_language': info.language,
+              'language_probability': info.language_probability,
+              'duration_seconds': info.duration,
+              'transcript': ' '.join(s['text'] for s in rows),
+              'segments': rows,
+              'limitation': 'Automatic transcription is not native-speaker listening review and does not verify timbre, accent quality or voice identity.',
+          }
+          text = json.dumps(result, ensure_ascii=False, indent=2)
+          (out / 'narration-qc.json').write_text(text + '\n', encoding='utf-8')
+          (out / 'transcript.txt').write_text(result['transcript'] + '\n', encoding='utf-8')
+          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('# Existing sample speech-recognition QC\n\n```json\n' + text + '\n```\n', encoding='utf-8')
+          print(text)
+      - name: Upload automatic transcript
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hari-Malaysia-Metaso-Narration-QC-${{ github.run_id }}
+          path: narration-qc/
+          if-no-files-found: warn
+          retention-days: 7
